@@ -1,6 +1,5 @@
 use anndata::{container::Axis, data::DynCsrMatrix, ArrayData};
 use nalgebra_sparse::{CooMatrix, CsrMatrix};
-use ndarray::Array2;
 use anndata_memory::{IMAnnData, IMArrayElement};
 
 fn create_test_data() -> (ArrayData, Vec<String>, Vec<String>) {
