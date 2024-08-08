@@ -9,7 +9,7 @@ use anndata::{
     data::{DataFrameIndex, SelectInfoElem, Shape},
     ArrayData, ArrayOp, Data, HasShape, WriteData,
 };
-use polars::{frame::DataFrame, series::Series};
+use polars::{frame::DataFrame, prelude::NamedFrom, series::Series};
 
 use crate::base::RwSlot;
 
@@ -97,6 +97,11 @@ impl Clone for IMDataFrameElement {
 
 impl IMDataFrameElement {
     pub fn new(df: DataFrame, index: DataFrameIndex) -> Self {
+        if df.height() == 0 {
+            let tmp_df =
+                DataFrame::new(vec![Series::new("index", &index.clone().into_vec())]).unwrap();
+            return IMDataFrameElement(RwSlot::new(InnerIMDataFrame { df: tmp_df, index }));
+        }
         if df.height() != index.len() {
             panic!("Length of index does not match length of DataFrame");
         }
@@ -129,9 +134,7 @@ impl IMDataFrameElement {
                 data.index = index;
                 Ok(())
             }
-            None => {
-                Err(anyhow::anyhow!("DataFrame is not initialized"))
-            }
+            None => Err(anyhow::anyhow!("DataFrame is not initialized")),
         }
     }
 
@@ -148,9 +151,7 @@ impl IMDataFrameElement {
                 data.df = df;
                 Ok(())
             }
-            None => {
-                Err(anyhow::anyhow!("DataFrame is not initialized"))
-            }
+            None => Err(anyhow::anyhow!("DataFrame is not initialized")),
         }
     }
 
@@ -168,9 +169,7 @@ impl IMDataFrameElement {
                 data.index = index;
                 Ok(())
             }
-            None => {
-                Err(anyhow::anyhow!("DataFrame is not initialized"))
-            }
+            None => Err(anyhow::anyhow!("DataFrame is not initialized")),
         }
     }
 
@@ -187,9 +186,7 @@ impl IMDataFrameElement {
                 data.df.with_column(column)?;
                 Ok(())
             }
-            None => {
-                Err(anyhow::anyhow!("DataFrame is not initialized"))
-            }
+            None => Err(anyhow::anyhow!("DataFrame is not initialized")),
         }
     }
 
@@ -201,9 +198,7 @@ impl IMDataFrameElement {
                 let _ = data.df.drop_in_place(column_name)?;
                 Ok(())
             }
-            None => {
-                Err(anyhow::anyhow!("DataFrame is not initialized"))
-            }
+            None => Err(anyhow::anyhow!("DataFrame is not initialized")),
         }
     }
 
@@ -215,9 +210,7 @@ impl IMDataFrameElement {
                 Ok(series) => Ok(series.clone()),
                 Err(e) => Err(anyhow::anyhow!("Column not found: {}", e)),
             },
-            None => {
-                Err(anyhow::anyhow!("DataFrame is not initialized"))
-            }
+            None => Err(anyhow::anyhow!("DataFrame is not initialized")),
         }
     }
 
@@ -229,9 +222,7 @@ impl IMDataFrameElement {
                 data.df.replace(column_name, column)?;
                 Ok(())
             }
-            None => {
-                Err(anyhow::anyhow!("DataFrame is not initialized"))
-            }
+            None => Err(anyhow::anyhow!("DataFrame is not initialized")),
         }
     }
 
@@ -274,6 +265,21 @@ impl IMAxisArrays {
             dim1,
             dim2,
             data: HashMap::new(),
+        };
+        IMAxisArrays(RwSlot::new(inner))
+    }
+
+    pub fn new_from(
+        axis: Axis,
+        dim1: Dim,
+        dim2: Option<Dim>,
+        data: HashMap<String, IMArrayElement>,
+    ) -> Self {
+        let inner = InnerIMAxisArray {
+            axis,
+            dim1,
+            dim2,
+            data,
         };
         IMAxisArrays(RwSlot::new(inner))
     }
@@ -425,6 +431,10 @@ impl Clone for Element {
 }
 
 impl Element {
+    pub fn new(data: Data) -> Self {
+        Element(RwSlot::new(data))
+    }
+
     pub fn get_data(&self) -> anyhow::Result<Data> {
         Ok(self.0.read_inner().clone())
     }

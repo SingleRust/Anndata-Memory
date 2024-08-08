@@ -29,3 +29,4 @@ proptest = "1"
 rand = "0.8.5"
 ndarray-rand = "0.14"
 nalgebra = { version = "0.32", features = ["rand"] }
+reqwest = "0.12.5"

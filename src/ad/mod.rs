@@ -117,6 +117,34 @@ impl IMAnnData {
         IMAnnData::new(IMArrayElement::new(matrix), obs, var)
     }
 
+    pub fn new_extended(
+        matrix: ArrayData,
+        obs_names: Vec<String>,
+        var_names: Vec<String>,
+        obs_df: DataFrame,
+        var_df: DataFrame,
+    ) -> anyhow::Result<Self> {
+        let s = matrix.shape();
+        let n_obs = s[0];
+        let n_vars = s[1];
+
+        // Validate dimensions
+        if n_obs != obs_names.len() || n_vars != var_names.len() {
+            return Err(anyhow::anyhow!("Dimensions mismatch between matrix and index names"));
+        }
+
+        // Create basic obs DataFrame and IMDataFrameElement
+        let obs_index: DataFrameIndex = obs_names.into();
+        let obs = IMDataFrameElement::new(obs_df, obs_index);
+
+        // Create basic var DataFrame and IMDataFrameElement
+        let var_index: DataFrameIndex = var_names.into();
+        let var = IMDataFrameElement::new(var_df, var_index);
+
+        // Create the IMAnnData object
+        IMAnnData::new(IMArrayElement::new(matrix), obs, var)
+    }
+
     /// Returns the number of observations.
     pub fn n_obs(&self) -> usize {
         self.n_obs.get()
@@ -125,6 +153,14 @@ impl IMAnnData {
     /// Returns the number of variables.
     pub fn n_vars(&self) -> usize {
         self.n_vars.get()
+    }
+
+    pub fn obs_names(&self) -> Vec<String> {
+        self.obs.get_index().into_vec()
+    }
+
+    pub fn var_names(&self) -> Vec<String> {
+        self.var.get_index().into_vec()
     }
 
     /// Returns a shallow clone of the main data matrix.
@@ -332,5 +368,37 @@ impl IMAnnData {
     /// will affect the original data in the `IMAnnData` instance.
     pub fn layers(&self) -> IMAxisArrays {
         self.layers.clone()
+    }
+}
+
+use std::fmt;
+
+impl fmt::Display for IMAnnData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "IMAnnData Object")?;
+        writeln!(f, "-----------------")?;
+        writeln!(f, "Dimensions: {} observations x {} variables", self.n_obs(), self.n_vars())?;
+        
+        // X matrix info
+        let x_shape = self.x().get_shape().map_err(|_| fmt::Error)?;
+        writeln!(f, "X: {:?} {}", x_shape, self.x().get_type().map_err(|_| fmt::Error)?)?;
+        
+        // Layers info
+        let layer_keys = self.layers().keys();
+        writeln!(f, "Layers: {} - {}", layer_keys.len(), layer_keys.join(", "))?;
+        
+        // Obs and Var info
+        writeln!(f, "Obs DataFrame Shape: {:?}", self.obs().get_data().shape())?;
+        writeln!(f, "Var DataFrame Shape: {:?}", self.var().get_data().shape())?;
+        
+        // Obsm, Obsp, Varm, Varp info
+        writeln!(f, "Obsm keys: {}", self.obsm().keys().join(", "))?;
+        writeln!(f, "Obsp keys: {}", self.obsp().keys().join(", "))?;
+        writeln!(f, "Varm keys: {}", self.varm().keys().join(", "))?;
+        writeln!(f, "Varp keys: {}", self.varp().keys().join(", "))?;
+        
+        // Uns info
+        
+        Ok(())
     }
 }
