@@ -1,8 +1,8 @@
-# 🚀 RwSlot: High-Performance Companion for anndata-rs 📊
+# 🚀 AnnData-Memory: High-Performance Companion for anndata-rs 📊
 
 ## 🌟 Overview
 
-RwSlot is a high-performance companion library designed to complement the `anndata-rs` crate. It focuses on boosting performance and enabling efficient multi-core processing for AnnData datasets.
+AnnData-Memory is a high-performance companion library designed to complement the `anndata-rs` crate. It focuses on boosting performance and enabling efficient multi-core processing for AnnData datasets.
 
 ## 🔑 Key Features
 

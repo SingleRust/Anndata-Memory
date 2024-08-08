@@ -2,6 +2,8 @@
 name = "anndata-memory"
 version = "0.1.0"
 edition = "2021"
+readme = "README.md"
+repository = "https://github.com/SingleRust/Anndata-Memory"
 
 [dependencies]
 anyhow = "1.0"
