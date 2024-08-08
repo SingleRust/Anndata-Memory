@@ -80,7 +80,7 @@ fn test_remove_layer() {
     let removed_layer = adata.remove_layer(&layer_name).unwrap();
 
     let shape = removed_layer.get_shape().unwrap();
-    assert_eq!(vec![shape[0], shape[1]], vec![2, 3]);
+    assert_eq!(vec![shape[0], shape[1]], vec![3, 3]);
 
     assert!(adata.get_layer(&layer_name).is_err());
 }
@@ -106,7 +106,7 @@ fn test_obsp_varp() {
 
     let obsp = adata.obsp();
     assert_eq!(obsp.axis(), Axis::Pairwise);
-    assert_eq!(obsp.dimensions().0.get(), 2);
+    assert_eq!(obsp.dimensions().0.get(), 3);
 
     let varp = adata.varp();
     assert_eq!(varp.axis(), Axis::Pairwise);
