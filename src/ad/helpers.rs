@@ -16,6 +16,10 @@ use crate::base::RwSlot;
 pub struct IMArrayElement(RwSlot<ArrayData>);
 
 impl IMArrayElement {
+    pub fn new(data: ArrayData) -> Self {
+        IMArrayElement(RwSlot::new(data))
+    }
+
     pub fn get_type(&self) -> anyhow::Result<DataType> {
         Ok(self.0.read_inner().data_type())
     }
@@ -92,6 +96,13 @@ impl Clone for IMDataFrameElement {
 }
 
 impl IMDataFrameElement {
+    pub fn new(df: DataFrame, index: DataFrameIndex) -> Self {
+        if df.height() != index.len() {
+            panic!("Length of index does not match length of DataFrame");
+        }
+        IMDataFrameElement(RwSlot::new(InnerIMDataFrame { df, index }))
+    }
+
     pub fn get_data(&self) -> DataFrame {
         self.0.read_inner().df.clone()
     }
@@ -119,7 +130,7 @@ impl IMDataFrameElement {
                 Ok(())
             }
             None => {
-                return Err(anyhow::anyhow!("DataFrame is not initialized"));
+                Err(anyhow::anyhow!("DataFrame is not initialized"))
             }
         }
     }
@@ -138,7 +149,7 @@ impl IMDataFrameElement {
                 Ok(())
             }
             None => {
-                return Err(anyhow::anyhow!("DataFrame is not initialized"));
+                Err(anyhow::anyhow!("DataFrame is not initialized"))
             }
         }
     }
@@ -158,7 +169,7 @@ impl IMDataFrameElement {
                 Ok(())
             }
             None => {
-                return Err(anyhow::anyhow!("DataFrame is not initialized"));
+                Err(anyhow::anyhow!("DataFrame is not initialized"))
             }
         }
     }
@@ -177,7 +188,7 @@ impl IMDataFrameElement {
                 Ok(())
             }
             None => {
-                return Err(anyhow::anyhow!("DataFrame is not initialized"));
+                Err(anyhow::anyhow!("DataFrame is not initialized"))
             }
         }
     }
@@ -187,11 +198,11 @@ impl IMDataFrameElement {
         let d = write_guard.as_mut();
         match d {
             Some(data) => {
-                data.df.drop_in_place(column_name)?;
+                let _ = data.df.drop_in_place(column_name)?;
                 Ok(())
             }
             None => {
-                return Err(anyhow::anyhow!("DataFrame is not initialized"));
+                Err(anyhow::anyhow!("DataFrame is not initialized"))
             }
         }
     }
@@ -205,7 +216,7 @@ impl IMDataFrameElement {
                 Err(e) => Err(anyhow::anyhow!("Column not found: {}", e)),
             },
             None => {
-                return Err(anyhow::anyhow!("DataFrame is not initialized"));
+                Err(anyhow::anyhow!("DataFrame is not initialized"))
             }
         }
     }
@@ -219,7 +230,7 @@ impl IMDataFrameElement {
                 Ok(())
             }
             None => {
-                return Err(anyhow::anyhow!("DataFrame is not initialized"));
+                Err(anyhow::anyhow!("DataFrame is not initialized"))
             }
         }
     }
@@ -231,6 +242,12 @@ impl IMDataFrameElement {
 
 pub struct IMAxisArrays(RwSlot<InnerIMAxisArray>);
 
+impl Clone for IMAxisArrays {
+    fn clone(&self) -> Self {
+        IMAxisArrays(self.0.clone())
+    }
+}
+
 pub struct InnerIMAxisArray {
     pub axis: Axis,
     pub(crate) dim1: Dim,
@@ -241,7 +258,7 @@ pub struct InnerIMAxisArray {
 impl Clone for InnerIMAxisArray {
     fn clone(&self) -> Self {
         InnerIMAxisArray {
-            axis: self.axis.clone(),
+            axis: self.axis,
             dim1: self.dim1.clone(),
             dim2: self.dim2.clone(),
             data: self.data.clone(),
@@ -362,7 +379,7 @@ impl IMAxisArrays {
     // Get the axis
     pub fn axis(&self) -> Axis {
         let read_guard = self.0.read_inner();
-        read_guard.axis.clone()
+        read_guard.axis
     }
 
     // Get dimensions
@@ -425,6 +442,12 @@ impl Element {
 }
 
 pub struct IMElementCollection(RwSlot<HashMap<String, Element>>);
+
+impl Clone for IMElementCollection {
+    fn clone(&self) -> Self {
+        IMElementCollection(self.0.clone())
+    }
+}
 
 impl IMElementCollection {
     pub fn new_empty() -> Self {

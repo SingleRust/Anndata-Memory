@@ -1,4 +1,8 @@
-use std::{fmt, ops::{Deref, DerefMut}, sync::Arc};
+use std::{
+    fmt,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
@@ -71,7 +75,7 @@ impl<T> RwSlot<T> {
     }
 
     pub fn extract(&self) -> Option<T> {
-        std::mem::replace(&mut self.lock_write(), None)
+        self.lock_write().take()
     }
 
     pub fn shallow_clone(&self) -> Self {
