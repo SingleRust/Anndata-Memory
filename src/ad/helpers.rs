@@ -1,6 +1,5 @@
 use std::{
-    collections::HashMap,
-    ops::{Deref, DerefMut},
+    collections::HashMap, fmt, ops::{Deref, DerefMut}
 };
 
 use anndata::{
@@ -257,6 +256,26 @@ impl Clone for InnerIMAxisArray {
     }
 }
 
+impl fmt::Display for IMAxisArrays {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let read_guard = self.0.read_inner();
+        
+        writeln!(f, "IMAxisArrays {{")?;
+        writeln!(f, "    Axis: {:?}", read_guard.axis)?;
+        writeln!(f, "    Dim1: {}", read_guard.dim1)?;
+        if let Some(dim2) = &read_guard.dim2 {
+            writeln!(f, "    Dim2: {}", dim2)?;
+        }
+        writeln!(f, "    Arrays: {{")?;
+        for (key, value) in &read_guard.data {
+            let shape = value.get_shape().map_err(|_| fmt::Error)?;
+            writeln!(f, "        {}: {:?}", key, shape)?;
+        }
+        writeln!(f, "    }}")?;
+        write!(f, "}}")
+    }
+}
+
 impl IMAxisArrays {
     // Create a new IMAxisArrays
     pub fn new(axis: Axis, dim1: Dim, dim2: Option<Dim>) -> Self {
@@ -295,7 +314,7 @@ impl IMAxisArrays {
         // Get the shape of the input element
         let shape = element.get_shape()?;
         let dim1 = imarray.dim1.get();
-        let dim2 = imarray.dim2.clone().unwrap().get();
+        let dim2 = imarray.dim2.clone().unwrap_or(Dim::new(0)).get();
 
         // Perform dimensionality checks based on the axis type
         match imarray.axis {

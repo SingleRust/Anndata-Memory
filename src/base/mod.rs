@@ -79,7 +79,7 @@ impl<T> RwSlot<T> {
     }
 
     pub fn shallow_clone(&self) -> Self {
-        RwSlot(self.0.clone())
+        RwSlot(Arc::clone(&self.0))
     }
 
     pub fn drop(&self) {
