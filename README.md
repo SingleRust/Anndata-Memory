@@ -1,5 +1,9 @@
 # 🚀 AnnData-Memory: High-Performance Companion for anndata-rs 📊
 
+## ⚠️ WARNING
+
+This library is currently in alpha testing and we just had limited time to test the implementation, but we will implement tests in the future!
+
 ## 🌟 Overview
 
 AnnData-Memory is a high-performance companion library designed to complement the `anndata-rs` crate. It focuses on boosting performance and enabling efficient multi-core processing for AnnData datasets.
@@ -34,4 +38,3 @@ TODO
 ## 🙏 Acknowledgments
 
 - The `anndata-rs` team for their fantastic work
-- Our contributors and the Rust community
