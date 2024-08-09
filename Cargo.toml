@@ -1,9 +1,10 @@
 [package]
 name = "anndata-memory"
-version = "0.1.0"
+version = "0.1.0-alpha.0"
 edition = "2021"
 readme = "README.md"
 repository = "https://github.com/SingleRust/Anndata-Memory"
+description = "Thread-safe AnnData-like structure for single-cell genomics data in Rust. Provides controlled mutability, efficient memory management, and flexible data manipulation. Ideal for concurrent bioinformatics applications."
 
 [dependencies]
 anyhow = "1.0"
