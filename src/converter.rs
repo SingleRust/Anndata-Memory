@@ -17,6 +17,7 @@ pub fn convert_to_in_memory<B: Backend>(anndata: AnnData<B>) -> anyhow::Result<I
     convert_axis_arrays(anndata.varm(), imad.varm())?;
     convert_axis_arrays(anndata.varp(), imad.varp())?;
     convert_uns(anndata.uns(), imad.uns())?;
+    anndata.close()?;
     Ok(imad)
 }
 

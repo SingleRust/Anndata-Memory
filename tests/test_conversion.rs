@@ -22,6 +22,7 @@ fn test_iman_length_converted() -> anyhow::Result<()> {
     let anndata = AnnData::<H5>::open(h5_file)?;
 
     let imanndata = convert_to_in_memory(anndata)?;
+    
     println!("{}", imanndata.obs_names().len());
     // print the first 5 elements
     for i in 0..5 {
