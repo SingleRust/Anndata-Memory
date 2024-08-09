@@ -1,4 +1,8 @@
-use anndata::{container::{Axis, Dim}, data::DataFrameIndex, ArrayData, HasShape};
+use anndata::{
+    container::{Axis, Dim},
+    data::{DataFrameIndex, SelectInfoElem},
+    ArrayData, HasShape,
+};
 use helpers::IMAxisArrays;
 use polars::{frame::DataFrame, prelude::NamedFrom, series::Series};
 
@@ -100,7 +104,9 @@ impl IMAnnData {
 
         // Validate dimensions
         if n_obs != obs_names.len() || n_vars != var_names.len() {
-            return Err(anyhow::anyhow!("Dimensions mismatch between matrix and index names"));
+            return Err(anyhow::anyhow!(
+                "Dimensions mismatch between matrix and index names"
+            ));
         }
 
         // Create basic obs DataFrame and IMDataFrameElement
@@ -130,7 +136,9 @@ impl IMAnnData {
 
         // Validate dimensions
         if n_obs != obs_names.len() || n_vars != var_names.len() {
-            return Err(anyhow::anyhow!("Dimensions mismatch between matrix and index names"));
+            return Err(anyhow::anyhow!(
+                "Dimensions mismatch between matrix and index names"
+            ));
         }
 
         // Create basic obs DataFrame and IMDataFrameElement
@@ -369,7 +377,71 @@ impl IMAnnData {
     pub fn layers(&self) -> IMAxisArrays {
         self.layers.clone()
     }
+    // !!!!! THIS IS VERY UNSAFE as it might allow for lock races, requires wrapping IMAnnData into a RwLock in order to prevent that, or transition to async data running of functions !!!!!
+    pub fn subset_inplace(&mut self, selection: &[&SelectInfoElem]) -> anyhow::Result<()> {
+        if selection.len() != 2 {
+            return Err(anyhow::anyhow!("Invalid selection, only 2-dimensional selections are supported on the in-memory anndata object!"));
+        }
 
+        let obs_sel = selection[0];
+        let var_sel = selection[1];
+
+        // check if these changes are valid
+        obs_sel.bound_check(self.n_obs())?;
+        var_sel.bound_check(self.n_vars())?;
+
+        self.obs.subset_inplace(obs_sel)?;
+        self.var.subset_inplace(var_sel)?;
+        self.layers.subset_inplace(selection)?;
+        self.obsm
+            .subset_inplace(vec![&obs_sel.clone(), &SelectInfoElem::full()].as_slice())?;
+        self.obsp
+            .subset_inplace(vec![&obs_sel.clone(), &obs_sel.clone()].as_slice())?;
+        self.varm
+            .subset_inplace(vec![&var_sel.clone(), &SelectInfoElem::full()].as_slice())?;
+        self.varp
+            .subset_inplace(vec![&var_sel.clone(), &var_sel.clone()].as_slice())?;
+
+        Ok(())
+    }
+
+    pub fn subset(&self, selection: &[&SelectInfoElem]) -> anyhow::Result<Self> {
+        if selection.len() != 2 {
+            return Err(anyhow::anyhow!("Invalid selection, only 2-dimensional selections are supported on the in-memory anndata object!"));
+        }
+
+        let obs_sel = selection[0];
+        let var_sel = selection[1];
+
+        // check if these changes are valid
+        obs_sel.bound_check(self.n_obs())?;
+        var_sel.bound_check(self.n_vars())?;
+
+        
+        let obs = self.obs.subset(obs_sel)?;
+        let var = self.var.subset(var_sel)?;
+        let layers = self.layers.subset(selection)?;
+        let obsm = self.obsm.subset(vec![&obs_sel.clone(), &SelectInfoElem::full()].as_slice())?;
+        let obsp = self.obsp.subset(vec![&obs_sel.clone(), &obs_sel.clone()].as_slice())?;
+        let varm = self.varm.subset(vec![&var_sel.clone(), &SelectInfoElem::full()].as_slice())?;
+        let varp = self.varp.subset(vec![&var_sel.clone(), &var_sel.clone()].as_slice())?;
+
+        let x = self.x.subset(selection)?;
+
+        Ok(IMAnnData {
+            n_obs: Dim::new(obs.get_data().height()),
+            n_vars: Dim::new(var.get_data().height()),
+            x,
+            obs,
+            obsm,
+            obsp,
+            var,
+            varm,
+            varp,
+            uns: self.uns.clone(),
+            layers,
+        })
+    }
 
 }
 
@@ -379,28 +451,51 @@ impl fmt::Display for IMAnnData {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "IMAnnData Object")?;
         writeln!(f, "-----------------")?;
-        writeln!(f, "Dimensions: {} observations x {} variables", self.n_obs(), self.n_vars())?;
-        
+        writeln!(
+            f,
+            "Dimensions: {} observations x {} variables",
+            self.n_obs(),
+            self.n_vars()
+        )?;
+
         // X matrix info
         let x_shape = self.x().get_shape().map_err(|_| fmt::Error)?;
-        writeln!(f, "X: {:?} {}", x_shape, self.x().get_type().map_err(|_| fmt::Error)?)?;
-        
+        writeln!(
+            f,
+            "X: {:?} {}",
+            x_shape,
+            self.x().get_type().map_err(|_| fmt::Error)?
+        )?;
+
         // Layers info
         let layer_keys = self.layers().keys();
-        writeln!(f, "Layers: {} - {}", layer_keys.len(), layer_keys.join(", "))?;
-        
+        writeln!(
+            f,
+            "Layers: {} - {}",
+            layer_keys.len(),
+            layer_keys.join(", ")
+        )?;
+
         // Obs and Var info
-        writeln!(f, "Obs DataFrame Shape: {:?}", self.obs().get_data().shape())?;
-        writeln!(f, "Var DataFrame Shape: {:?}", self.var().get_data().shape())?;
-        
+        writeln!(
+            f,
+            "Obs DataFrame Shape: {:?}",
+            self.obs().get_data().shape()
+        )?;
+        writeln!(
+            f,
+            "Var DataFrame Shape: {:?}",
+            self.var().get_data().shape()
+        )?;
+
         // Obsm, Obsp, Varm, Varp info
         writeln!(f, "Obsm keys: {}", self.obsm().keys().join(", "))?;
         writeln!(f, "Obsp keys: {}", self.obsp().keys().join(", "))?;
         writeln!(f, "Varm keys: {}", self.varm().keys().join(", "))?;
         writeln!(f, "Varp keys: {}", self.varp().keys().join(", "))?;
-        
+
         // Uns info
-        
+
         Ok(())
     }
 }

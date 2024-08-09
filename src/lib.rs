@@ -1,6 +1,7 @@
 mod ad;
 mod base;
 mod converter;
+pub(crate) mod utils;
 
 pub use ad::IMAnnData;
 pub use ad::helpers::IMArrayElement;

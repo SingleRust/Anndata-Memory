@@ -1,5 +1,7 @@
 use std::{
-    collections::HashMap, fmt, ops::{Deref, DerefMut}
+    collections::HashMap,
+    fmt,
+    ops::{Deref, DerefMut},
 };
 
 use anndata::{
@@ -8,7 +10,11 @@ use anndata::{
     data::{DataFrameIndex, SelectInfoElem, Shape},
     ArrayData, ArrayOp, Data, HasShape, WriteData,
 };
-use polars::{frame::DataFrame, prelude::NamedFrom, series::Series};
+use polars::{
+    frame::DataFrame,
+    prelude::{IdxCa, NamedFrom},
+    series::Series,
+};
 
 use crate::base::RwSlot;
 
@@ -48,12 +54,12 @@ impl IMArrayElement {
         Ok(())
     }
 
-    pub fn subset(&self, s: &[&SelectInfoElem]) -> anyhow::Result<ArrayData> {
+    pub fn subset(&self, s: &[&SelectInfoElem]) -> anyhow::Result<Self> {
         let read_guard = self.0.read_inner();
         let d = read_guard.deref();
 
         // Return a new ArrayData by selecting from d
-        Ok(d.select(s))
+        Ok(IMArrayElement::new(d.select(s)))
     }
 
     pub fn deep_clone(&self) -> anyhow::Result<Self> {
@@ -228,6 +234,31 @@ impl IMDataFrameElement {
     pub fn deep_clone(&self) -> anyhow::Result<Self> {
         Ok(IMDataFrameElement(self.0.deep_clone()))
     }
+
+    pub fn subset_inplace(&self, s: &SelectInfoElem) -> anyhow::Result<()> {
+        let mut write_guard = self.0.write_inner();
+        let d = write_guard.deref_mut();
+        let indices = crate::utils::select_info_elem_to_indices(s, d.index.len())?;
+        let indices_u32: Vec<u32> = indices.iter().map(|&i| i as u32).collect();
+        let idx = IdxCa::new("idx", &indices_u32);
+        // Perform the selection operation directly on d
+        let ind = d.index.clone().into_vec();
+        let ind_subset: Vec<String> = indices.iter().map(|&i| ind[i].clone()).collect();
+        let df_subset = d.df.take(&idx)?;
+        self.set_both(df_subset, DataFrameIndex::from(ind_subset))
+    }
+
+    pub fn subset(&self, s: &SelectInfoElem) -> anyhow::Result<Self> {
+        let read_guard = self.0.lock_read();
+        let d = read_guard.as_ref().unwrap();
+        let indices = crate::utils::select_info_elem_to_indices(s, d.index.len())?;
+        let indices_u32: Vec<u32> = indices.iter().map(|&i| i as u32).collect();
+        let idx = IdxCa::new("idx", &indices_u32);
+        let ind = d.index.clone().into_vec();
+        let ind_subset: Vec<String> = indices.iter().map(|&i| ind[i].clone()).collect();
+        let df_subset = d.df.take(&idx)?;
+        Ok(Self::new(df_subset, DataFrameIndex::from(ind_subset)))
+    }
 }
 
 pub struct IMAxisArrays(RwSlot<InnerIMAxisArray>);
@@ -259,7 +290,7 @@ impl Clone for InnerIMAxisArray {
 impl fmt::Display for IMAxisArrays {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let read_guard = self.0.read_inner();
-        
+
         writeln!(f, "IMAxisArrays {{")?;
         writeln!(f, "    Axis: {:?}", read_guard.axis)?;
         writeln!(f, "    Dim1: {}", read_guard.dim1)?;
@@ -422,6 +453,60 @@ impl IMAxisArrays {
         } else {
             Err(anyhow::anyhow!("Key not found"))
         }
+    }
+
+    pub fn subset_inplace(&self, s: &[&SelectInfoElem]) -> anyhow::Result<()> {
+        let mut write_guard = self.0.write_inner();
+        let imarray = write_guard.deref_mut();
+        let dim1_indices = crate::utils::select_info_elem_to_indices(s[0], imarray.dim1.get())?;
+        imarray.dim1.try_set(dim1_indices.len())?;
+
+        if let Some(dim2) = &mut imarray.dim2 {
+            if s.len() < 2 {
+                return Err(anyhow::anyhow!(
+                    "Subset operation requires two selection elements"
+                ));
+            }
+            let dim2_indices = crate::utils::select_info_elem_to_indices(s[1], dim2.get())?;
+            dim2.try_set(dim2_indices.len())?;
+        }
+
+        for element in imarray.data.values_mut() {
+            element.subset_inplace(s)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn subset(
+        &self,
+        s: &[&SelectInfoElem]
+    ) -> anyhow::Result<Self> {
+        let read_guard = self.0.read_inner();
+        let imarray = read_guard.deref();
+        let dim1_indices = crate::utils::select_info_elem_to_indices(s[0], imarray.dim1.get())?;
+        let new_dim1 = Dim::new(dim1_indices.len());
+        let mut new_dim2: Option<Dim> = None;
+        if imarray.dim2.is_some() {
+            if s.len() < 2 {
+                return Err(anyhow::anyhow!(
+                    "Subset operation requires two selection elements"
+                ));
+            }
+            let dim2_indices = crate::utils::select_info_elem_to_indices(s[1], imarray.dim2.clone().unwrap().get())?;
+            new_dim2 = Some(Dim::new(dim2_indices.len()));
+        }
+        let mut new_data = HashMap::new();
+        for (key, element) in &imarray.data {
+            new_data.insert(key.clone(), element.subset(s)?);
+        }
+
+        Ok(IMAxisArrays::new_from(
+            imarray.axis,
+            new_dim1,
+            new_dim2,
+            new_data,
+        ))
     }
 
     // Perform an operation on all arrays
