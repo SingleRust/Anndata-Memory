@@ -5,6 +5,10 @@ edition = "2021"
 readme = "README.md"
 repository = "https://github.com/SingleRust/Anndata-Memory"
 description = "Thread-safe AnnData-like structure for single-cell genomics data in Rust. Provides controlled mutability, efficient memory management, and flexible data manipulation. Ideal for concurrent bioinformatics applications."
+include = [
+    "**/*.rs",
+    "Cargo.toml",
+]
 
 [dependencies]
 anyhow = "1.0"
