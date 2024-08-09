@@ -9,6 +9,8 @@ include = [
     "**/*.rs",
     "Cargo.toml",
 ]
+license = "BSD-3-Clause"
+license-file = "LICENSE.md"
 
 [dependencies]
 anyhow = "1.0"
