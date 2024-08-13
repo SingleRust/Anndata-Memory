@@ -18,7 +18,7 @@ use polars::{
 
 use crate::base::RwSlot;
 
-pub struct IMArrayElement(RwSlot<ArrayData>);
+pub struct IMArrayElement(pub RwSlot<ArrayData>);
 
 impl IMArrayElement {
     pub fn new(data: ArrayData) -> Self {
@@ -261,7 +261,7 @@ impl IMDataFrameElement {
     }
 }
 
-pub struct IMAxisArrays(RwSlot<InnerIMAxisArray>);
+pub struct IMAxisArrays(pub RwSlot<InnerIMAxisArray>);
 
 impl Clone for IMAxisArrays {
     fn clone(&self) -> Self {
@@ -526,7 +526,7 @@ impl IMAxisArrays {
     }
 }
 
-pub struct Element(RwSlot<Data>);
+pub struct Element(pub RwSlot<Data>);
 
 impl Clone for Element {
     fn clone(&self) -> Self {
@@ -555,7 +555,7 @@ impl Element {
     }
 }
 
-pub struct IMElementCollection(RwSlot<HashMap<String, Element>>);
+pub struct IMElementCollection(pub RwSlot<HashMap<String, Element>>);
 
 impl Clone for IMElementCollection {
     fn clone(&self) -> Self {
