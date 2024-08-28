@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "anndata-memory"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 dependencies = [
  "anndata",
  "anndata-hdf5",
