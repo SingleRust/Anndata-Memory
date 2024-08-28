@@ -559,10 +559,6 @@ impl IMAxisArrays {
         }
         Ok(())
     }
-
-    pub fn deep_clone(&self) -> anyhow::Result<Self> {
-        Ok(IMAxisArrays(self.0.deep_clone()))
-    }
 }
 
 pub struct Element(pub RwSlot<Data>);
@@ -600,17 +596,19 @@ impl Element {
         *d = Some(data);
         Ok(())
     }
-
-    pub fn deep_clone(&self) -> anyhow::Result<Self> {
-        Ok(Element(self.0.deep_clone()))
-    }
 }
 
 pub struct IMElementCollection(pub RwSlot<HashMap<String, Element>>);
 
 impl DeepClone for IMElementCollection {
     fn deep_clone(&self) -> Self {
-        IMElementCollection(self.0.clone())
+        let temp_data = self.0.read_inner();
+        let data = temp_data.deref();
+        let mut new_data = HashMap::new();
+        for (key, value) in data.iter() {
+            new_data.insert(key.clone(), value.deep_clone());
+        }
+        IMElementCollection(RwSlot::new(new_data))
     }
 }
 
@@ -654,7 +652,7 @@ impl IMElementCollection {
         let read_guard = self.0.read_inner();
         read_guard
             .get(key)
-            .map(|element| element.deep_clone().unwrap())
+            .map(|element| element.deep_clone())
             .ok_or_else(|| anyhow::anyhow!("Key not found"))
     }
 }

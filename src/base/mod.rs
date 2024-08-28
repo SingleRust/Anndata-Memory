@@ -4,6 +4,7 @@ use std::{
     sync::Arc,
 };
 
+/// Trait for types that can be cloned shallowly and deeply
 pub trait DeepClone {
     fn deep_clone(&self) -> Self;
 }

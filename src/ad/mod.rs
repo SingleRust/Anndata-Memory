@@ -6,7 +6,7 @@ use anndata::{
 use helpers::IMAxisArrays;
 use polars::{frame::DataFrame, prelude::NamedFrom, series::Series};
 
-use crate::{IMArrayElement, IMDataFrameElement, IMElementCollection};
+use crate::{base::DeepClone, IMArrayElement, IMDataFrameElement, IMElementCollection};
 
 pub(crate) mod helpers;
 
@@ -497,5 +497,23 @@ impl fmt::Display for IMAnnData {
         // Uns info
 
         Ok(())
+    }
+}
+
+impl DeepClone for IMAnnData {
+    fn deep_clone(&self) -> Self {
+        Self {
+            n_obs: self.n_obs.clone(),
+            n_vars: self.n_vars.clone(),
+            x: self.x.deep_clone(),
+            obs: self.obs.deep_clone(),
+            obsm: self.obsm.deep_clone(),
+            obsp: self.obsp.deep_clone(),
+            var: self.var.deep_clone(),
+            varm: self.varm.deep_clone(),
+            varp: self.varp.deep_clone(),
+            uns: self.uns.deep_clone(),
+            layers: self.layers.deep_clone(),
+        }
     }
 }
