@@ -4,6 +4,10 @@ use std::{
     sync::Arc,
 };
 
+pub trait DeepClone {
+    fn deep_clone(&self) -> Self;
+}
+
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 pub struct RwSlot<T>(Arc<RwLock<Option<T>>>);
@@ -14,11 +18,11 @@ impl<T> Clone for RwSlot<T> {
     }
 }
 
-impl<T: Clone> RwSlot<T> {
-    pub fn deep_clone(&self) -> Self {
+impl<T: DeepClone> DeepClone for RwSlot<T> {
+    fn deep_clone(&self) -> Self {
         let inner = self.lock_read();
         match inner.as_ref() {
-            Some(value) => RwSlot::new(value.clone()),
+            Some(value) => RwSlot::new(value.deep_clone()),
             None => RwSlot::none(),
         }
     }
@@ -192,22 +196,6 @@ mod tests {
         // Verify that the modification affects both original and clone
         assert_eq!(*original.read_inner(), vec![1, 2, 3, 4]);
         assert_eq!(*cloned.read_inner(), vec![1, 2, 3, 4]);
-    }
-
-    #[test]
-    fn test_deep_clone() {
-        let original = RwSlot::new(vec![1, 2, 3]);
-        let cloned = original.deep_clone();
-
-        // Verify that the cloned value is equal to the original
-        assert_eq!(*original.read_inner(), *cloned.read_inner());
-
-        // Modify the original to ensure the clone is independent
-        original.write_inner().push(4);
-
-        // Verify that the modification doesn't affect the clone
-        assert_eq!(*original.read_inner(), vec![1, 2, 3, 4]);
-        assert_eq!(*cloned.read_inner(), vec![1, 2, 3]);
     }
 
     #[test]

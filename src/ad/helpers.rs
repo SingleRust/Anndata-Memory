@@ -17,6 +17,14 @@ use polars::{
 };
 
 use crate::base::RwSlot;
+use crate::base::DeepClone;
+
+
+impl DeepClone for ArrayData {
+    fn deep_clone(&self) -> Self {
+        self.clone()
+    }
+}
 
 pub struct IMArrayElement(pub RwSlot<ArrayData>);
 
@@ -62,12 +70,14 @@ impl IMArrayElement {
         Ok(IMArrayElement::new(d.select(s)))
     }
 
-    pub fn deep_clone(&self) -> anyhow::Result<Self> {
-        Ok(IMArrayElement(self.0.deep_clone()))
-    }
-
     pub fn deep_clone_content(&self) -> anyhow::Result<ArrayData> {
         Ok(self.0.read_inner().clone())
+    }
+}
+
+impl DeepClone for IMArrayElement {
+    fn deep_clone(&self) -> Self {
+        IMArrayElement(self.0.deep_clone())
     }
 }
 
@@ -82,6 +92,12 @@ pub struct IMDataFrameElement(RwSlot<InnerIMDataFrame>);
 pub struct InnerIMDataFrame {
     df: DataFrame,
     pub index: DataFrameIndex,
+}
+
+impl DeepClone for InnerIMDataFrame {
+    fn deep_clone(&self) -> Self {
+        self.clone()
+    }
 }
 
 impl Clone for InnerIMDataFrame {
@@ -231,10 +247,6 @@ impl IMDataFrameElement {
         }
     }
 
-    pub fn deep_clone(&self) -> anyhow::Result<Self> {
-        Ok(IMDataFrameElement(self.0.deep_clone()))
-    }
-
     pub fn subset_inplace(&self, s: &SelectInfoElem) -> anyhow::Result<()> {
         let mut write_guard = self.0.write_inner();
         let d = write_guard.deref_mut();
@@ -261,6 +273,12 @@ impl IMDataFrameElement {
     }
 }
 
+impl DeepClone for IMDataFrameElement {
+    fn deep_clone(&self) -> Self {
+        IMDataFrameElement(self.0.deep_clone())
+    }
+}
+
 pub struct IMAxisArrays(pub RwSlot<InnerIMAxisArray>);
 
 impl Clone for IMAxisArrays {
@@ -269,11 +287,32 @@ impl Clone for IMAxisArrays {
     }
 }
 
+impl DeepClone for IMAxisArrays {
+    fn deep_clone(&self) -> Self {
+        IMAxisArrays(self.0.deep_clone())
+    }
+}
+
 pub struct InnerIMAxisArray {
     pub axis: Axis,
     pub(crate) dim1: Dim,
     pub(crate) dim2: Option<Dim>,
     data: HashMap<String, IMArrayElement>,
+}
+
+impl DeepClone for InnerIMAxisArray {
+    fn deep_clone(&self) -> Self {
+        InnerIMAxisArray {
+            axis: self.axis,
+            dim1: self.dim1.clone(),
+            dim2: self.dim2.clone(),
+            data: self
+                .data
+                .iter()
+                .map(|(k, v)| (k.clone(), v.deep_clone()))
+                .collect(),
+        }
+    }
 }
 
 impl Clone for InnerIMAxisArray {
@@ -391,7 +430,7 @@ impl IMAxisArrays {
         read_guard
             .data
             .get(key)
-            .map(|element| element.deep_clone().unwrap())
+            .map(|element| element.deep_clone())
             .ok_or_else(|| anyhow::anyhow!("Key not found"))
     }
 
@@ -528,6 +567,18 @@ impl IMAxisArrays {
 
 pub struct Element(pub RwSlot<Data>);
 
+impl DeepClone for Data {
+    fn deep_clone(&self) -> Self {
+        self.clone()
+    }
+}
+
+impl DeepClone for Element {
+    fn deep_clone(&self) -> Self {
+        Element(self.0.deep_clone())
+    }
+}
+
 impl Clone for Element {
     fn clone(&self) -> Self {
         Element(self.0.clone())
@@ -556,6 +607,12 @@ impl Element {
 }
 
 pub struct IMElementCollection(pub RwSlot<HashMap<String, Element>>);
+
+impl DeepClone for IMElementCollection {
+    fn deep_clone(&self) -> Self {
+        IMElementCollection(self.0.clone())
+    }
+}
 
 impl Clone for IMElementCollection {
     fn clone(&self) -> Self {
