@@ -3,6 +3,7 @@ use anndata::{
     data::{DataFrameIndex, SelectInfoElem},
     ArrayData, HasShape,
 };
+use log::{log, Level};
 use helpers::IMAxisArrays;
 use polars::{frame::DataFrame, prelude::NamedFrom, series::Series};
 
@@ -379,6 +380,7 @@ impl IMAnnData {
     }
     // !!!!! THIS IS VERY UNSAFE as it might allow for lock races, requires wrapping IMAnnData into a RwLock in order to prevent that, or transition to async data running of functions !!!!!
     pub fn subset_inplace(&mut self, selection: &[&SelectInfoElem]) -> anyhow::Result<()> {
+        log!(Level::Debug, "Staring subsetting inplace");
         if selection.len() != 2 {
             return Err(anyhow::anyhow!("Invalid selection, only 2-dimensional selections are supported on the in-memory anndata object!"));
         }
@@ -387,18 +389,28 @@ impl IMAnnData {
         let var_sel = selection[1];
 
         // check if these changes are valid
+        log!(Level::Debug, "Performing boundchecks");
         obs_sel.bound_check(self.n_obs())?;
         var_sel.bound_check(self.n_vars())?;
 
+        log!(Level::Debug, "Subsetting X");
+        self.x.subset(selection)?;
+        log!(Level::Debug, "Subsetting obs");
         self.obs.subset_inplace(obs_sel)?;
+        log!(Level::Debug, "Subsetting var");
         self.var.subset_inplace(var_sel)?;
+        log!(Level::Debug, "Subsetting layers");
         self.layers.subset_inplace(selection)?;
+        log!(Level::Debug, "Subsetting obsm");
         self.obsm
             .subset_inplace(vec![&obs_sel.clone(), &SelectInfoElem::full()].as_slice())?;
+        log!(Level::Debug, "Subsetting obsp");
         self.obsp
             .subset_inplace(vec![&obs_sel.clone(), &obs_sel.clone()].as_slice())?;
+        log!(Level::Debug, "Subsetting varm");
         self.varm
             .subset_inplace(vec![&var_sel.clone(), &SelectInfoElem::full()].as_slice())?;
+        log!(Level::Debug, "Subsetting varp");
         self.varp
             .subset_inplace(vec![&var_sel.clone(), &var_sel.clone()].as_slice())?;
 
