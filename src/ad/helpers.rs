@@ -10,6 +10,7 @@ use anndata::{
     data::{DataFrameIndex, SelectInfoElem, Shape},
     ArrayData, ArrayOp, Data, HasShape, WriteData,
 };
+use flate2::read;
 use polars::{
     frame::DataFrame,
     prelude::{IdxCa, NamedFrom},
@@ -248,16 +249,16 @@ impl IMDataFrameElement {
     }
 
     pub fn subset_inplace(&self, s: &SelectInfoElem) -> anyhow::Result<()> {
-        
-        let mut write_guard = self.0.write_inner();
-        let d = write_guard.deref_mut();
+
+        let read_guard = self.0.lock_read();
+        let d = read_guard.as_ref().unwrap();
         let indices = crate::utils::select_info_elem_to_indices(s, d.index.len())?;
         let indices_u32: Vec<u32> = indices.iter().map(|&i| i as u32).collect();
         let idx = IdxCa::new("idx", &indices_u32);
-        // Perform the selection operation directly on d
         let ind = d.index.clone().into_vec();
         let ind_subset: Vec<String> = indices.iter().map(|&i| ind[i].clone()).collect();
         let df_subset = d.df.take(&idx)?;
+        drop(read_guard);
         self.set_both(df_subset, DataFrameIndex::from(ind_subset))
     }
 
