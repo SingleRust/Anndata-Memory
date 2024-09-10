@@ -248,6 +248,7 @@ impl IMDataFrameElement {
     }
 
     pub fn subset_inplace(&self, s: &SelectInfoElem) -> anyhow::Result<()> {
+        
         let mut write_guard = self.0.write_inner();
         let d = write_guard.deref_mut();
         let indices = crate::utils::select_info_elem_to_indices(s, d.index.len())?;

@@ -394,7 +394,7 @@ impl IMAnnData {
         var_sel.bound_check(self.n_vars())?;
 
         log!(Level::Debug, "Subsetting X");
-        self.x.subset(selection)?;
+        self.x.subset_inplace(selection)?;
         log!(Level::Debug, "Subsetting obs");
         self.obs.subset_inplace(obs_sel)?;
         log!(Level::Debug, "Subsetting var");
