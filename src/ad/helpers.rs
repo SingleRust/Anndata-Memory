@@ -10,7 +10,6 @@ use anndata::{
     data::{DataFrameIndex, SelectInfoElem, Shape},
     ArrayData, ArrayOp, Data, HasShape, WriteData,
 };
-use flate2::read;
 use polars::{
     frame::DataFrame,
     prelude::{IdxCa, NamedFrom},
