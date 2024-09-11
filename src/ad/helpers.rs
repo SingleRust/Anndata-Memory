@@ -16,9 +16,8 @@ use polars::{
     series::Series,
 };
 
-use crate::base::RwSlot;
 use crate::base::DeepClone;
-
+use crate::base::RwSlot;
 
 impl DeepClone for ArrayData {
     fn deep_clone(&self) -> Self {
@@ -142,10 +141,7 @@ impl IMDataFrameElement {
         let d = write_guard.as_mut();
         match d {
             Some(data) => {
-                if data.df.height() != df.height()
-                    || data.index.len() != index.len()
-                    || data.df.height() != index.len()
-                {
+                if index.len() != df.height() {
                     return Err(anyhow::anyhow!(
                         "Length of index does not match length of DataFrame"
                     ));
@@ -248,7 +244,6 @@ impl IMDataFrameElement {
     }
 
     pub fn subset_inplace(&self, s: &SelectInfoElem) -> anyhow::Result<()> {
-
         let read_guard = self.0.lock_read();
         let d = read_guard.as_ref().unwrap();
         let indices = crate::utils::select_info_elem_to_indices(s, d.index.len())?;
@@ -499,7 +494,7 @@ impl IMAxisArrays {
         let mut write_guard = self.0.write_inner();
         let imarray = write_guard.deref_mut();
         let dim1_indices = crate::utils::select_info_elem_to_indices(s[0], imarray.dim1.get())?;
-        imarray.dim1.try_set(dim1_indices.len())?;
+        imarray.dim1 = Dim::new(dim1_indices.len());
 
         if let Some(dim2) = &mut imarray.dim2 {
             if s.len() < 2 {
@@ -508,7 +503,7 @@ impl IMAxisArrays {
                 ));
             }
             let dim2_indices = crate::utils::select_info_elem_to_indices(s[1], dim2.get())?;
-            dim2.try_set(dim2_indices.len())?;
+            *dim2 = Dim::new(dim2_indices.len());
         }
 
         for element in imarray.data.values_mut() {
@@ -518,10 +513,7 @@ impl IMAxisArrays {
         Ok(())
     }
 
-    pub fn subset(
-        &self,
-        s: &[&SelectInfoElem]
-    ) -> anyhow::Result<Self> {
+    pub fn subset(&self, s: &[&SelectInfoElem]) -> anyhow::Result<Self> {
         let read_guard = self.0.read_inner();
         let imarray = read_guard.deref();
         let dim1_indices = crate::utils::select_info_elem_to_indices(s[0], imarray.dim1.get())?;
@@ -533,7 +525,10 @@ impl IMAxisArrays {
                     "Subset operation requires two selection elements"
                 ));
             }
-            let dim2_indices = crate::utils::select_info_elem_to_indices(s[1], imarray.dim2.clone().unwrap().get())?;
+            let dim2_indices = crate::utils::select_info_elem_to_indices(
+                s[1],
+                imarray.dim2.clone().unwrap().get(),
+            )?;
             new_dim2 = Some(Dim::new(dim2_indices.len()));
         }
         let mut new_data = HashMap::new();

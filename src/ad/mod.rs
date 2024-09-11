@@ -3,8 +3,8 @@ use anndata::{
     data::{DataFrameIndex, SelectInfoElem},
     ArrayData, HasShape,
 };
-use log::{log, Level};
 use helpers::IMAxisArrays;
+use log::{log, Level};
 use polars::{frame::DataFrame, prelude::NamedFrom, series::Series};
 
 use crate::{base::DeepClone, IMArrayElement, IMDataFrameElement, IMElementCollection};
@@ -414,6 +414,9 @@ impl IMAnnData {
         self.varp
             .subset_inplace(vec![&var_sel.clone(), &var_sel.clone()].as_slice())?;
 
+        self.n_obs = Dim::new(self.obs.get_data().height());
+        self.n_vars = Dim::new(self.var.get_data().height());
+
         Ok(())
     }
 
@@ -429,14 +432,21 @@ impl IMAnnData {
         obs_sel.bound_check(self.n_obs())?;
         var_sel.bound_check(self.n_vars())?;
 
-        
         let obs = self.obs.subset(obs_sel)?;
         let var = self.var.subset(var_sel)?;
         let layers = self.layers.subset(selection)?;
-        let obsm = self.obsm.subset(vec![&obs_sel.clone(), &SelectInfoElem::full()].as_slice())?;
-        let obsp = self.obsp.subset(vec![&obs_sel.clone(), &obs_sel.clone()].as_slice())?;
-        let varm = self.varm.subset(vec![&var_sel.clone(), &SelectInfoElem::full()].as_slice())?;
-        let varp = self.varp.subset(vec![&var_sel.clone(), &var_sel.clone()].as_slice())?;
+        let obsm = self
+            .obsm
+            .subset(vec![&obs_sel.clone(), &SelectInfoElem::full()].as_slice())?;
+        let obsp = self
+            .obsp
+            .subset(vec![&obs_sel.clone(), &obs_sel.clone()].as_slice())?;
+        let varm = self
+            .varm
+            .subset(vec![&var_sel.clone(), &SelectInfoElem::full()].as_slice())?;
+        let varp = self
+            .varp
+            .subset(vec![&var_sel.clone(), &var_sel.clone()].as_slice())?;
 
         let x = self.x.subset(selection)?;
 
@@ -454,7 +464,6 @@ impl IMAnnData {
             layers,
         })
     }
-
 }
 
 use std::fmt;
