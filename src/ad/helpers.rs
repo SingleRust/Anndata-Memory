@@ -2,14 +2,18 @@ use std::{
     collections::HashMap,
     fmt,
     ops::{Deref, DerefMut},
+    sync::Arc,
 };
 
 use anndata::{
     backend::DataType,
     container::{Axis, Dim},
-    data::{DataFrameIndex, SelectInfoElem, Shape},
+    data::{DataFrameIndex, DynArray, DynCscMatrix, DynCsrMatrix, SelectInfoElem, Shape},
     ArrayData, ArrayOp, Data, HasShape, WriteData,
 };
+use anyhow::{anyhow, bail};
+
+use ndarray::Array2;
 use polars::{
     frame::DataFrame,
     prelude::{IdxCa, NamedFrom},
@@ -58,6 +62,65 @@ impl IMArrayElement {
         // Perform the selection operation directly on d
         *d = d.select(s);
 
+        Ok(())
+    }
+
+    pub fn convert_matrix_format(&self) -> anyhow::Result<()> {
+        let mut write_guard = self.0.write_inner();
+        let d = write_guard.deref_mut();
+        
+        // Create a placeholder that we can swap with - use an empty dense array as it's likely the smallest
+        let ddata: Array2<f64> = Array2::zeros((0, 0));
+        let placeholder = ArrayData::Array(DynArray::from(ddata));
+        
+        // Take ownership using replace
+        let matrix_data = std::mem::replace(d, placeholder);
+        
+        let converted = match matrix_data {
+            ArrayData::CsrMatrix(dyn_csr_matrix) => {
+                let csc = match dyn_csr_matrix {
+                    DynCsrMatrix::F64(m) => DynCscMatrix::F64(m.transpose_as_csc()),
+                    DynCsrMatrix::F32(m) => DynCscMatrix::F32(m.transpose_as_csc()),
+                    DynCsrMatrix::I64(m) => DynCscMatrix::I64(m.transpose_as_csc()),
+                    DynCsrMatrix::I32(m) => DynCscMatrix::I32(m.transpose_as_csc()),
+                    DynCsrMatrix::I16(m) => DynCscMatrix::I16(m.transpose_as_csc()),
+                    DynCsrMatrix::I8(m) => DynCscMatrix::I8(m.transpose_as_csc()),
+                    DynCsrMatrix::U64(m) => DynCscMatrix::U64(m.transpose_as_csc()),
+                    DynCsrMatrix::U32(m) => DynCscMatrix::U32(m.transpose_as_csc()),
+                    DynCsrMatrix::U16(m) => DynCscMatrix::U16(m.transpose_as_csc()),
+                    DynCsrMatrix::U8(m) => DynCscMatrix::U8(m.transpose_as_csc()),
+                    DynCsrMatrix::Bool(m) => DynCscMatrix::Bool(m.transpose_as_csc()),
+                    DynCsrMatrix::String(m) => DynCscMatrix::String(m.transpose_as_csc()),
+                    DynCsrMatrix::Usize(m) => DynCscMatrix::Usize(m.transpose_as_csc()),
+                };
+                ArrayData::CscMatrix(csc)
+            }
+            ArrayData::CscMatrix(dyn_csc_matrix) => {
+                let csr = match dyn_csc_matrix {
+                    DynCscMatrix::F64(m) => DynCsrMatrix::F64(m.transpose_as_csr()),
+                    DynCscMatrix::F32(m) => DynCsrMatrix::F32(m.transpose_as_csr()),
+                    DynCscMatrix::I64(m) => DynCsrMatrix::I64(m.transpose_as_csr()),
+                    DynCscMatrix::I32(m) => DynCsrMatrix::I32(m.transpose_as_csr()),
+                    DynCscMatrix::I16(m) => DynCsrMatrix::I16(m.transpose_as_csr()),
+                    DynCscMatrix::I8(m) => DynCsrMatrix::I8(m.transpose_as_csr()),
+                    DynCscMatrix::U64(m) => DynCsrMatrix::U64(m.transpose_as_csr()),
+                    DynCscMatrix::U32(m) => DynCsrMatrix::U32(m.transpose_as_csr()),
+                    DynCscMatrix::U16(m) => DynCsrMatrix::U16(m.transpose_as_csr()),
+                    DynCscMatrix::U8(m) => DynCsrMatrix::U8(m.transpose_as_csr()),
+                    DynCscMatrix::Bool(m) => DynCsrMatrix::Bool(m.transpose_as_csr()),
+                    DynCscMatrix::String(m) => DynCsrMatrix::String(m.transpose_as_csr()),
+                    DynCscMatrix::Usize(m) => DynCsrMatrix::Usize(m.transpose_as_csr()),
+                };
+                ArrayData::CsrMatrix(csr)
+            }
+            _ => {
+                // Put back the original value since we're erroring
+                *d = matrix_data;
+                bail!("This datatype is not supported, only CSC and CSR matrices are supported.")
+            }
+        };
+        
+        *d = converted;
         Ok(())
     }
 
