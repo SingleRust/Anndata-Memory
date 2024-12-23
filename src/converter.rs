@@ -1,9 +1,9 @@
 use std::ops::Deref;
 
-use anndata::{AnnData, AnnDataOp, ArrayData, ArrayElemOp, AxisArrays, Backend, Data, ElemCollection};
+use anndata::{AnnData, AnnDataOp, ArrayData, ArrayElemOp, AxisArrays, Backend, ElemCollection};
 use anyhow::Ok;
 
-use crate::{ad::helpers::{Element, IMAxisArrays}, IMAnnData, IMArrayElement, IMElementCollection};
+use crate::{ad::helpers::{IMElement, IMAxisArrays}, IMAnnData, IMArrayElement, IMElementCollection};
 
 pub fn convert_to_in_memory<B: Backend>(anndata: AnnData<B>) -> anyhow::Result<IMAnnData> {
     let obs_df = anndata.read_obs()?; 
@@ -44,8 +44,8 @@ fn convert_uns_to_mem<B: Backend>(elem_col: &ElemCollection<B>, reference_elemen
     let iax = x.deref();
     let data = iax.deref();
     for (k,v) in data.iter() {
-        let data = v.inner().data::<Data>();
-        let d = Element::new(data?);
+        let data = v.inner().data();
+        let d = IMElement::new(data?);
         reference_element.add_data(k.to_string(), d)?;
     }
     Ok(())

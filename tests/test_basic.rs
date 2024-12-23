@@ -41,7 +41,7 @@ fn test_convert_matrix_format() {
     // Convert to CSR format
     let csr = CsrMatrix::from(&coo);
     let array_data = ArrayData::CsrMatrix(DynCsrMatrix::F64(csr));
-    let mut matrix = IMArrayElement::new(array_data);
+    let matrix = IMArrayElement::new(array_data);
 
     // Convert CSR to CSC
     matrix.convert_matrix_format().unwrap();
@@ -72,37 +72,37 @@ fn test_convert_matrix_format() {
                     // Check specific values
                     assert_eq!(
                         m.triplet_iter()
-                            .find(|&(i, j, &v)| i == 0 && j == 0)
+                            .find(|&(i, j, &_v)| i == 0 && j == 0)
                             .map(|(_, _, &v)| v),
                         Some(1.0)
                     );
                     assert_eq!(
                         m.triplet_iter()
-                            .find(|&(i, j, &v)| i == 1 && j == 1)
+                            .find(|&(i, j, &_v)| i == 1 && j == 1)
                             .map(|(_, _, &v)| v),
                         Some(2.0)
                     );
                     assert_eq!(
                         m.triplet_iter()
-                            .find(|&(i, j, &v)| i == 1 && j == 2)
+                            .find(|&(i, j, &_v)| i == 1 && j == 2)
                             .map(|(_, _, &v)| v),
                         Some(3.0)
                     );
                     assert_eq!(
                         m.triplet_iter()
-                            .find(|&(i, j, &v)| i == 2 && j == 3)
+                            .find(|&(i, j, &_v)| i == 2 && j == 3)
                             .map(|(_, _, &v)| v),
                         Some(4.0)
                     );
                     assert_eq!(
                         m.triplet_iter()
-                            .find(|&(i, j, &v)| i == 3 && j == 1)
+                            .find(|&(i, j, &_v)| i == 3 && j == 1)
                             .map(|(_, _, &v)| v),
                         Some(5.0)
                     );
                     assert_eq!(
                         m.triplet_iter()
-                            .find(|&(i, j, &v)| i == 4 && j == 3)
+                            .find(|&(i, j, &_v)| i == 4 && j == 3)
                             .map(|(_, _, &v)| v),
                         Some(6.0)
                     );

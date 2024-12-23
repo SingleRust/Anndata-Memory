@@ -2,21 +2,20 @@ use std::{
     collections::HashMap,
     fmt,
     ops::{Deref, DerefMut},
-    sync::Arc,
 };
 
 use anndata::{
     backend::DataType,
     container::{Axis, Dim},
-    data::{DataFrameIndex, DynArray, DynCscMatrix, DynCsrMatrix, SelectInfoElem, Shape},
-    ArrayData, ArrayOp, Data, HasShape, WriteData,
+    data::{DataFrameIndex, DynArray, DynCscMatrix, DynCsrMatrix, Element, SelectInfoElem, Shape},
+    ArrayData, Data, HasShape, Selectable,
 };
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 
 use ndarray::Array2;
 use polars::{
     frame::DataFrame,
-    prelude::{IdxCa, NamedFrom},
+    prelude::{Column, IdxCa, NamedFrom},
     series::Series,
 };
 
@@ -68,14 +67,14 @@ impl IMArrayElement {
     pub fn convert_matrix_format(&self) -> anyhow::Result<()> {
         let mut write_guard = self.0.write_inner();
         let d = write_guard.deref_mut();
-        
+
         // Create a placeholder that we can swap with - use an empty dense array as it's likely the smallest
         let ddata: Array2<f64> = Array2::zeros((0, 0));
         let placeholder = ArrayData::Array(DynArray::from(ddata));
-        
+
         // Take ownership using replace
         let matrix_data = std::mem::replace(d, placeholder);
-        
+
         let converted = match matrix_data {
             ArrayData::CsrMatrix(dyn_csr_matrix) => {
                 let csc = match dyn_csr_matrix {
@@ -91,7 +90,6 @@ impl IMArrayElement {
                     DynCsrMatrix::U8(m) => DynCscMatrix::U8(m.transpose_as_csc()),
                     DynCsrMatrix::Bool(m) => DynCscMatrix::Bool(m.transpose_as_csc()),
                     DynCsrMatrix::String(m) => DynCscMatrix::String(m.transpose_as_csc()),
-                    DynCsrMatrix::Usize(m) => DynCscMatrix::Usize(m.transpose_as_csc()),
                 };
                 ArrayData::CscMatrix(csc)
             }
@@ -109,7 +107,6 @@ impl IMArrayElement {
                     DynCscMatrix::U8(m) => DynCsrMatrix::U8(m.transpose_as_csr()),
                     DynCscMatrix::Bool(m) => DynCsrMatrix::Bool(m.transpose_as_csr()),
                     DynCscMatrix::String(m) => DynCsrMatrix::String(m.transpose_as_csr()),
-                    DynCscMatrix::Usize(m) => DynCsrMatrix::Usize(m.transpose_as_csr()),
                 };
                 ArrayData::CsrMatrix(csr)
             }
@@ -119,7 +116,7 @@ impl IMArrayElement {
                 bail!("This datatype is not supported, only CSC and CSR matrices are supported.")
             }
         };
-        
+
         *d = converted;
         Ok(())
     }
@@ -182,7 +179,8 @@ impl IMDataFrameElement {
     pub fn new(df: DataFrame, index: DataFrameIndex) -> Self {
         if df.height() == 0 {
             let tmp_df =
-                DataFrame::new(vec![Series::new("index", &index.clone().into_vec())]).unwrap();
+                DataFrame::new(vec![Column::new("index".into(), &index.clone().into_vec())])
+                    .unwrap();
             return IMDataFrameElement(RwSlot::new(InnerIMDataFrame { df: tmp_df, index }));
         }
         if df.height() != index.len() {
@@ -282,12 +280,12 @@ impl IMDataFrameElement {
         }
     }
 
-    pub fn get_column_from_df(&self, column_name: &str) -> anyhow::Result<Series> {
+    pub fn get_column_from_df(&self, column_name: &str) -> anyhow::Result<Column> {
         let read_guard = self.0.lock_read();
         let d = read_guard.as_ref();
         match d {
             Some(data) => match data.df.column(column_name) {
-                Ok(series) => Ok(series.clone()),
+                Ok(column) => Ok(column.clone()),
                 Err(e) => Err(anyhow::anyhow!("Column not found: {}", e)),
             },
             None => Err(anyhow::anyhow!("DataFrame is not initialized")),
@@ -311,7 +309,7 @@ impl IMDataFrameElement {
         let d = read_guard.as_ref().unwrap();
         let indices = crate::utils::select_info_elem_to_indices(s, d.index.len())?;
         let indices_u32: Vec<u32> = indices.iter().map(|&i| i as u32).collect();
-        let idx = IdxCa::new("idx", &indices_u32);
+        let idx = IdxCa::new("idx".into(), &indices_u32);
         let ind = d.index.clone().into_vec();
         let ind_subset: Vec<String> = indices.iter().map(|&i| ind[i].clone()).collect();
         let df_subset = d.df.take(&idx)?;
@@ -324,7 +322,7 @@ impl IMDataFrameElement {
         let d = read_guard.as_ref().unwrap();
         let indices = crate::utils::select_info_elem_to_indices(s, d.index.len())?;
         let indices_u32: Vec<u32> = indices.iter().map(|&i| i as u32).collect();
-        let idx = IdxCa::new("idx", &indices_u32);
+        let idx = IdxCa::new("idx".into(), &indices_u32);
         let ind = d.index.clone().into_vec();
         let ind_subset: Vec<String> = indices.iter().map(|&i| ind[i].clone()).collect();
         let df_subset = d.df.take(&idx)?;
@@ -620,7 +618,7 @@ impl IMAxisArrays {
     }
 }
 
-pub struct Element(pub RwSlot<Data>);
+pub struct IMElement(pub RwSlot<Data>);
 
 impl DeepClone for Data {
     fn deep_clone(&self) -> Self {
@@ -628,21 +626,21 @@ impl DeepClone for Data {
     }
 }
 
-impl DeepClone for Element {
+impl DeepClone for IMElement {
     fn deep_clone(&self) -> Self {
-        Element(self.0.deep_clone())
+        IMElement(self.0.deep_clone())
     }
 }
 
-impl Clone for Element {
+impl Clone for IMElement {
     fn clone(&self) -> Self {
-        Element(self.0.clone())
+        IMElement(self.0.clone())
     }
 }
 
-impl Element {
+impl IMElement {
     pub fn new(data: Data) -> Self {
-        Element(RwSlot::new(data))
+        IMElement(RwSlot::new(data))
     }
 
     pub fn get_data(&self) -> anyhow::Result<Data> {
@@ -657,7 +655,7 @@ impl Element {
     }
 }
 
-pub struct IMElementCollection(pub RwSlot<HashMap<String, Element>>);
+pub struct IMElementCollection(pub RwSlot<HashMap<String, IMElement>>);
 
 impl DeepClone for IMElementCollection {
     fn deep_clone(&self) -> Self {
@@ -682,7 +680,7 @@ impl IMElementCollection {
         IMElementCollection(RwSlot::new(HashMap::new()))
     }
 
-    pub fn add_data(&self, key: String, element: Element) -> anyhow::Result<()> {
+    pub fn add_data(&self, key: String, element: IMElement) -> anyhow::Result<()> {
         let mut write_guard = self.0.write_inner();
         let collection = write_guard.deref_mut();
         if collection.contains_key(&key) {
@@ -692,14 +690,14 @@ impl IMElementCollection {
         Ok(())
     }
 
-    pub fn remove_data(&self, key: &str) -> anyhow::Result<Element> {
+    pub fn remove_data(&self, key: &str) -> anyhow::Result<IMElement> {
         let mut write_guard = self.0.write_inner();
         write_guard
             .remove(key)
             .ok_or_else(|| anyhow::anyhow!("Key not found"))
     }
 
-    pub fn get_data(&self, key: &str) -> anyhow::Result<Element> {
+    pub fn get_data(&self, key: &str) -> anyhow::Result<IMElement> {
         let read_guard = self.0.read_inner();
         read_guard
             .get(key)
@@ -707,7 +705,7 @@ impl IMElementCollection {
             .ok_or_else(|| anyhow::anyhow!("Key not found"))
     }
 
-    pub fn get_data_deep(&self, key: &str) -> anyhow::Result<Element> {
+    pub fn get_data_deep(&self, key: &str) -> anyhow::Result<IMElement> {
         let read_guard = self.0.read_inner();
         read_guard
             .get(key)

@@ -5,7 +5,7 @@ use anndata::{
 };
 use helpers::IMAxisArrays;
 use log::{log, Level};
-use polars::{frame::DataFrame, prelude::NamedFrom, series::Series};
+use polars::{frame::DataFrame, prelude::Column};
 
 use crate::{base::DeepClone, IMArrayElement, IMDataFrameElement, IMElementCollection};
 
@@ -111,12 +111,12 @@ impl IMAnnData {
         }
 
         // Create basic obs DataFrame and IMDataFrameElement
-        let obs_df = DataFrame::new(vec![Series::new("index", &obs_names)])?;
+        let obs_df = DataFrame::new(vec![Column::new("index".into(), &obs_names)])?;
         let obs_index: DataFrameIndex = obs_names.into();
         let obs = IMDataFrameElement::new(obs_df, obs_index);
 
         // Create basic var DataFrame and IMDataFrameElement
-        let var_df = DataFrame::new(vec![Series::new("index", &var_names)])?;
+        let var_df = DataFrame::new(vec![Column::new("index".into(), &var_names)])?;
         let var_index: DataFrameIndex = var_names.into();
         let var = IMDataFrameElement::new(var_df, var_index);
 
