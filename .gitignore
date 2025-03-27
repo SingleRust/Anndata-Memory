@@ -1,3 +1,6 @@
 /target
 
 *.testdata.h5ad
+
+.idea
+.idea/
