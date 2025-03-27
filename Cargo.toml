@@ -13,22 +13,20 @@ license-file = "LICENSE.md"
 
 [dependencies]
 anyhow = "1.0"
-flate2 = "1.0"
 log = "0.4"
-indexmap = { version = "2.6", features = ["rayon"] }
-itertools = "0.13"
-ndarray = { version = "0.16" }
-nalgebra-sparse = "0.10"
-num = "0.4"
-polars = { version = "0.45", features = ["lazy", "decompress-fast", "ndarray", "dtype-full"] }
+ndarray = { version = "0.16.1", features = ["rayon"] }
+nalgebra = { version = "0.33.2", features = ["serde-serialize", "rayon"] }
+nalgebra-sparse = "0.10.0"
+polars = { version = "0.45.1", features = [
+    "lazy",
+    "decompress-fast",
+    "ndarray",
+    "dtype-full",
+] }
 parking_lot = "0.12"
-replace_with = "0.1"
-smallvec = "1.13"
-rayon = "1.10"
-permutation = "0.4"
 anndata = "0.6.1"
 anndata-hdf5 = "0.5.0"
-single_algebra = "0.1.1-alpha.5"
+
 
 
 [dev-dependencies]
