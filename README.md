@@ -1,6 +1,6 @@
 # AnnData-Memory
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.0.1-blue)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-green)](LICENSE.md)
 
 A high-performance, thread-safe, in-memory implementation of the AnnData data structure for the SingleRust ecosystem.
@@ -31,7 +31,7 @@ Add AnnData-Memory to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-anndata-memory = "1.0.0"
+anndata-memory = "1.0.1"
 ```
 
 ## Usage
