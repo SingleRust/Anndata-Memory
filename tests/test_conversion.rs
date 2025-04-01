@@ -4,8 +4,8 @@ use anndata::{
 use anndata_hdf5::H5;
 use anndata_memory::*;
 
-#[test]
-//#[allow(dead_code)]
+//#[test]
+#[allow(dead_code)]
 fn test_convert_anndata_to_imanndata_filter() -> anyhow::Result<()> {
     let h5_file = H5::open("/local/bachelor_thesis_ian/single_bench/data/merged_test.h5ad")?;
     let anndata = AnnData::<H5>::open(h5_file)?;

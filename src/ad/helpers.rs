@@ -12,7 +12,6 @@ use anndata::{
 };
 use anyhow::bail;
 
-use nalgebra_sparse::CsrMatrix;
 use ndarray::Array2;
 use polars::{
     frame::DataFrame,
@@ -750,5 +749,12 @@ impl IMElementCollection {
             .get(key)
             .map(|element| element.deep_clone())
             .ok_or_else(|| anyhow::anyhow!("Key not found"))
+    }
+
+    pub fn keys(&self) -> anyhow::Result<Vec<String>> {
+        let read_guard = self.0.read_inner();
+        let data = read_guard.deref();
+        let keys = data.keys().map(|k| k.clone()).collect();
+        Ok(keys)
     }
 }
