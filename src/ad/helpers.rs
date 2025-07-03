@@ -19,8 +19,8 @@ use polars::{
     series::Series,
 };
 
-use crate::base::DeepClone;
 use crate::base::RwSlot;
+use crate::{base::DeepClone, utils::subset_dyn_csc_matrix, utils::subset_dyn_csr_matrix};
 
 impl DeepClone for ArrayData {
     fn deep_clone(&self) -> Self {
@@ -58,10 +58,32 @@ impl IMArrayElement {
         let mut write_guard = self.0.write_inner();
         let d = write_guard.deref_mut();
 
-        // Perform the selection operation directly on d
-        *d = d.select(s);
+        // Replace the data with a placeholder to take ownership
+        let placeholder = ArrayData::Array(DynArray::from(Array2::<f64>::zeros((0, 0))));
+        let data = std::mem::replace(d, placeholder);
 
-        Ok(())
+        // Process the data by consuming it
+        let result = match data {
+            ArrayData::Array(arr) => Ok(ArrayData::Array(arr).select(s)),
+            ArrayData::DataFrame(df) => Ok(ArrayData::DataFrame(df).select(s)),
+            ArrayData::CsrNonCanonical(csr) => Ok(ArrayData::CsrNonCanonical(csr).select(s)),
+            ArrayData::CsrMatrix(dyn_csr) => {
+                subset_dyn_csr_matrix(dyn_csr, s).map(ArrayData::CsrMatrix)
+            }
+            ArrayData::CscMatrix(dyn_csc) => {
+                subset_dyn_csc_matrix(dyn_csc, s).map(ArrayData::CscMatrix)
+            }
+        };
+
+        match result {
+            Ok(processed) => {
+                *d = processed;
+                Ok(())
+            }
+            Err(e) => {
+                Err(e)
+            }
+        }
     }
 
     pub fn convert_matrix_format(&self) -> anyhow::Result<()> {
@@ -132,44 +154,6 @@ impl IMArrayElement {
     pub fn deep_clone_content(&self) -> anyhow::Result<ArrayData> {
         Ok(self.0.read_inner().clone())
     }
-
-    // pub fn change_matrix_type<T>(&self) -> anyhow::Result<()> {
-    //     let mut write_guard = self.0.write_inner();
-    //     let d = write_guard.deref_mut();
-    //
-    //     // Create a placeholder that we can swap with - use an empty dense array as it's likely the smallest
-    //     let ddata: Array2<f64> = Array2::zeros((0, 0));
-    //     let placeholder = ArrayData::Array(DynArray::from(ddata));
-    //
-    //     // Take ownership using replace
-    //     let matrix_data = std::mem::replace(d, placeholder);
-    //
-    //     let converted_matrix = match matrix_data {
-    //         ArrayData::Array(dyn_array) => todo!(),
-    //         ArrayData::CsrMatrix(dyn_csr_matrix) => {
-    //             let csr_matrix: CsrMatrix<T> = match dyn_csr_matrix {
-    //                 DynCsrMatrix::I8(csr_matrix) => csr_matrix.try_into()?,
-    //                 DynCsrMatrix::I16(csr_matrix) => todo!(),
-    //                 DynCsrMatrix::I32(csr_matrix) => todo!(),
-    //                 DynCsrMatrix::I64(csr_matrix) => todo!(),
-    //                 DynCsrMatrix::U8(csr_matrix) => todo!(),
-    //                 DynCsrMatrix::U16(csr_matrix) => todo!(),
-    //                 DynCsrMatrix::U32(csr_matrix) => todo!(),
-    //                 DynCsrMatrix::U64(csr_matrix) => todo!(),
-    //                 DynCsrMatrix::F32(csr_matrix) => todo!(),
-    //                 DynCsrMatrix::F64(csr_matrix) => todo!(),
-    //                 DynCsrMatrix::Bool(csr_matrix) => todo!(),
-    //                 DynCsrMatrix::String(csr_matrix) => todo!(),
-    //             };
-    //             ArrayData::from(csr_matrix)
-    //         }
-    //         ArrayData::CsrNonCanonical(dyn_csr_non_canonical) => todo!(),
-    //         ArrayData::CscMatrix(dyn_csc_matrix) => todo!(),
-    //         ArrayData::DataFrame(data_frame) => todo!(),
-    //     };
-    //     * d = converted_matrix;
-    //     Ok(())
-    // }
 }
 
 impl DeepClone for IMArrayElement {
