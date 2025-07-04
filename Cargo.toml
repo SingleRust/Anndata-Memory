@@ -1,6 +1,6 @@
 [package]
 name = "anndata-memory"
-version = "1.0.3"
+version = "1.0.4"
 edition = "2021"
 readme = "README.md"
 repository = "https://github.com/SingleRust/Anndata-Memory"
@@ -26,7 +26,6 @@ polars = { version = "0.45.1", features = [
 parking_lot = "0.12"
 anndata = "0.6.1"
 anndata-hdf5 = "0.5.0"
-
 
 
 [dev-dependencies]
