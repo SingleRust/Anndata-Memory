@@ -3,7 +3,6 @@ use std::ops::{Deref, DerefMut};
 use anndata::data::DataFrameIndex;
 use anndata::{
     AnnData, AnnDataOp, ArrayData, ArrayElemOp, AxisArrays, Backend, ElemCollection,
-    ElemCollectionOp,
 };
 use anndata_hdf5::H5;
 use anyhow::Ok;
@@ -12,6 +11,25 @@ use crate::{
     ad::helpers::{IMAxisArrays, IMElement},
     IMAnnData, IMArrayElement, IMElementCollection,
 };
+
+#[derive(Clone, Debug)]
+pub struct LoadingConfig {
+    pub use_chunked_loading: bool,
+    pub chunk_size_mb: usize,
+    pub memory_threshold_mb: usize,
+    pub show_progress: bool,
+}
+
+impl Default for LoadingConfig {
+    fn default() -> Self {
+        Self {
+            use_chunked_loading: false,
+            chunk_size_mb: 100,
+            memory_threshold_mb: 1024,
+            show_progress: true,
+        }
+    }
+}
 
 pub fn convert_to_in_memory<B: Backend>(anndata: AnnData<B>) -> anyhow::Result<IMAnnData> {
     let obs_df = anndata.read_obs()?;

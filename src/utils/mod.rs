@@ -1,8 +1,10 @@
 use std::{collections::HashMap, mem::replace};
 
-use anndata::data::{DynCscMatrix, DynCsrMatrix, SelectInfoElem};
+use anndata::{backend::{DataContainer, DatasetOp, GroupOp, ScalarType}, data::{DynCscMatrix, DynCsrMatrix, SelectInfoElem}, Backend};
 use nalgebra_sparse::{pattern::SparsityPattern, CscMatrix, CsrMatrix};
 use ndarray::Slice;
+
+use crate::converter::LoadingConfig;
 
 pub(crate) fn select_info_elem_to_indices(
     elem: &SelectInfoElem,
@@ -321,4 +323,139 @@ fn subset_csc_matrix<T>(
 
     CscMatrix::try_from_pattern_and_values(new_pattern, new_values)
         .map_err(|e| anyhow::anyhow!("Failed to create CSC matrix: {:?}", e))
+}
+
+// ####################################################################################################
+//                              Optimized loader
+// ####################################################################################################
+
+
+pub fn read_array_as_usize_optimized<B: Backend>(dataset: &B::Dataset) -> anyhow::Result<Vec<usize>> {
+    // For usize-compatible types on 64-bit systems, try to avoid copying
+    #[cfg(target_pointer_width = "64")]
+    {
+        use anndata::backend::{DatasetOp, ScalarType};
+
+        if let ScalarType::U64 = dataset.dtype()? {
+            let arr = dataset.read_array::<u64, ndarray::Ix1>()?;
+            let (vec, offset) = arr.into_raw_vec_and_offset();
+            if offset.is_none() {
+                // SAFETY: On 64-bit systems, usize and u64 have the same representation
+                return Ok(unsafe { std::mem::transmute::<Vec<u64>, Vec<usize>>(vec) });
+            }
+        }
+    }
+    
+    #[cfg(target_pointer_width = "32")]
+    {
+        if let ScalarType::U32 = dataset.dtype()? {
+            let arr = dataset.read_array::<u32, ndarray::Ix1>()?;
+            let (vec, offset) = arr.into_raw_vec_and_offset();
+            if offset.is_none() {
+                // SAFETY: On 32-bit systems, usize and u32 have the same representation
+                return Ok(unsafe { std::mem::transmute::<Vec<u32>, Vec<usize>>(vec) });
+            }
+        }
+    }
+    
+    // Fallback to your existing function
+    read_array_as_usize::<B>(dataset)
+}
+
+fn read_array_as_usize<B: Backend>(dataset: &B::Dataset) -> anyhow::Result<Vec<usize>> {
+    match dataset.dtype()? {
+        ScalarType::U64 => {
+            let arr = dataset.read_array::<u64, ndarray::Ix1>()?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        ScalarType::U32 => {
+            let arr = dataset.read_array::<u32, ndarray::Ix1>()?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        ScalarType::U16 => {
+            let arr = dataset.read_array::<u16, ndarray::Ix1>()?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        ScalarType::U8 => {
+            let arr = dataset.read_array::<u8, ndarray::Ix1>()?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        ScalarType::I64 => {
+            let arr = dataset.read_array::<i64, ndarray::Ix1>()?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        ScalarType::I32 => {
+            let arr = dataset.read_array::<i32, ndarray::Ix1>()?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        ScalarType::I16 => {
+            let arr = dataset.read_array::<i16, ndarray::Ix1>()?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        ScalarType::I8 => {
+            let arr = dataset.read_array::<i8, ndarray::Ix1>()?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        dt => anyhow::bail!("Cannot read {:?} as usize array", dt),
+    }
+}
+
+fn read_array_slice_as_usize<B: Backend>(
+    dataset: &B::Dataset,
+    selection: &[SelectInfoElem],
+) -> anyhow::Result<Vec<usize>> {
+    match dataset.dtype()? {
+        ScalarType::U64 => {
+            let arr = dataset.read_array_slice::<u64, _, ndarray::Ix1>(selection)?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        ScalarType::U32 => {
+            let arr = dataset.read_array_slice::<u32, _, ndarray::Ix1>(selection)?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        ScalarType::U16 => {
+            let arr = dataset.read_array_slice::<u16, _, ndarray::Ix1>(selection)?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        ScalarType::U8 => {
+            let arr = dataset.read_array_slice::<u8, _, ndarray::Ix1>(selection)?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        ScalarType::I64 => {
+            let arr = dataset.read_array_slice::<i64, _, ndarray::Ix1>(selection)?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        ScalarType::I32 => {
+            let arr = dataset.read_array_slice::<i32, _, ndarray::Ix1>(selection)?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        ScalarType::I16 => {
+            let arr = dataset.read_array_slice::<i16, _, ndarray::Ix1>(selection)?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        ScalarType::I8 => {
+            let arr = dataset.read_array_slice::<i8, _, ndarray::Ix1>(selection)?;
+            Ok(arr.into_iter().map(|x| x as usize).collect())
+        }
+        dt => anyhow::bail!("Cannot read {:?} as usize array", dt),
+    }
+}
+
+pub fn should_use_chunked_loading<B: Backend>(
+    container: &DataContainer<B>,
+    config: &LoadingConfig
+) -> anyhow::Result<bool> {
+    if config.use_chunked_loading {
+        return Ok(true);
+    }
+
+    match container.encoding_type()? {
+        anndata::backend::DataType::CsrMatrix(scalar_type) => {
+            let group = container.as_group()?;
+            let nnz = group.open_dataset("data")?.shape()[0];
+            let estimated_mb = (nnz * 16) / 1_048_576;
+            Ok(estimated_mb > config.memory_threshold_mb)
+        },
+        _ => Ok(false)
+    }
 }

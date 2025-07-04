@@ -2,6 +2,8 @@ mod ad;
 mod base;
 mod converter;
 pub(crate) mod utils;
+pub(crate) mod chunked_loader;
+pub(crate) mod optimized_loader;
 
 pub use ad::IMAnnData;
 pub use ad::helpers::IMArrayElement;
