@@ -1,10 +1,12 @@
 use std::{collections::HashMap, mem::replace};
-
+use anndata::backend::AttributeOp;
+use anndata::data::index::Interval;
+use anndata::data::DataFrameIndex;
 use anndata::{backend::{DataContainer, DatasetOp, GroupOp, ScalarType}, data::{DynCscMatrix, DynCsrMatrix, SelectInfoElem}, ArrayData, Backend};
 use nalgebra_sparse::{pattern::SparsityPattern, CscMatrix, CsrMatrix};
 use ndarray::Slice;
 
-use crate::converter::LoadingConfig;
+use crate::{LoadingConfig, LoadingStrategy};
 
 pub(crate) fn select_info_elem_to_indices(
     elem: &SelectInfoElem,
@@ -331,34 +333,36 @@ fn subset_csc_matrix<T>(
 
 
 pub fn read_array_as_usize_optimized<B: Backend>(dataset: &B::Dataset) -> anyhow::Result<Vec<usize>> {
-    // For usize-compatible types on 64-bit systems, try to avoid copying
+    // Critical optimization: On 64-bit systems, try zero-copy for u64
     #[cfg(target_pointer_width = "64")]
     {
-        use anndata::backend::{DatasetOp, ScalarType};
-
         if let ScalarType::U64 = dataset.dtype()? {
             let arr = dataset.read_array::<u64, ndarray::Ix1>()?;
             let (vec, offset) = arr.into_raw_vec_and_offset();
             if offset.is_none() {
-                // SAFETY: On 64-bit systems, usize and u64 have the same representation
+                // ZERO-COPY: Direct transmutation on 64-bit systems
                 return Ok(unsafe { std::mem::transmute::<Vec<u64>, Vec<usize>>(vec) });
             }
+            // Fallback if zero-copy not possible
+            return Ok(vec.into_iter().map(|x| x as usize).collect());
         }
     }
     
+    // Critical optimization: On 32-bit systems, try zero-copy for u32  
     #[cfg(target_pointer_width = "32")]
     {
         if let ScalarType::U32 = dataset.dtype()? {
             let arr = dataset.read_array::<u32, ndarray::Ix1>()?;
             let (vec, offset) = arr.into_raw_vec_and_offset();
             if offset.is_none() {
-                // SAFETY: On 32-bit systems, usize and u32 have the same representation
+                // ZERO-COPY: Direct transmutation on 32-bit systems
                 return Ok(unsafe { std::mem::transmute::<Vec<u32>, Vec<usize>>(vec) });
             }
+            return Ok(vec.into_iter().map(|x| x as usize).collect());
         }
     }
     
-    // Fallback to your existing function
+    // Fallback to the original function for other types
     read_array_as_usize::<B>(dataset)
 }
 
@@ -445,19 +449,59 @@ pub fn should_use_chunked_loading<B: Backend>(
     container: &DataContainer<B>,
     config: &LoadingConfig
 ) -> anyhow::Result<bool> {
-    if config.use_chunked_loading {
-        return Ok(true);
+    // Check for explicit user override first
+    match config.loading_strategy {
+        LoadingStrategy::ForceComplete => return Ok(false),  // Force complete loading
+        LoadingStrategy::ForceChunked => return Ok(true),   // Force chunked loading
+        LoadingStrategy::Auto => {}, // Continue with automatic decision
     }
 
+    // Only consider chunked loading for CSR matrices
     match container.encoding_type()? {
         anndata::backend::DataType::CsrMatrix(_) => {
             let group = container.as_group()?;
+            let shape: Vec<u64> = group.get_attr("shape")?;
+            let nrows = shape[0] as usize;
             let nnz = group.open_dataset("data")?.shape()[0];
-            let estimated_mb = (nnz * 16) / 1_048_576;
-            Ok(estimated_mb > config.memory_threshold_mb)
+            
+            // Estimate total memory needed for CSR matrix construction
+            let data_type_size = match group.open_dataset("data")?.dtype()? {
+                ScalarType::F64 | ScalarType::I64 | ScalarType::U64 => 8,
+                ScalarType::F32 | ScalarType::I32 | ScalarType::U32 => 4,
+                ScalarType::I16 | ScalarType::U16 => 2,
+                ScalarType::I8 | ScalarType::U8 | ScalarType::Bool => 1,
+                ScalarType::String => 24, // Rough estimate for String
+            };
+            
+            let estimated_memory_mb = estimate_csr_total_memory_usage(nnz, nrows, data_type_size) / 1_048_576;
+            
+            if config.show_progress {
+                println!("  Estimated peak memory usage: {} MB (threshold: {} MB)", 
+                        estimated_memory_mb, config.memory_threshold_mb);
+            }
+            
+            // Use chunked loading if estimated memory exceeds threshold
+            Ok(estimated_memory_mb > config.memory_threshold_mb)
         },
-        _ => Ok(false)
+        _ => Ok(false) // Never use chunked loading for non-CSR data
     }
+}
+
+fn estimate_csr_total_memory_usage(
+    nnz: usize,
+    nrows: usize,
+    data_type_size: usize,
+) -> usize {
+    // During loading, we temporarily need:
+    let data_array_size = nnz * data_type_size;                    
+    let indices_array_size = nnz * std::mem::size_of::<usize>();   
+    let indptr_array_size = (nrows + 1) * std::mem::size_of::<usize>(); 
+    
+    let final_csr_size = data_array_size + indices_array_size + indptr_array_size;
+    
+    let peak_usage = (data_array_size + indices_array_size + indptr_array_size) + final_csr_size;
+    
+    (peak_usage as f64 * 1.2) as usize
 }
 
 pub fn build_csr_matrix<T>(
@@ -476,4 +520,40 @@ where
     };
     let csr = CsrMatrix::try_from_pattern_and_values(pattern, data).map_err(|e| anyhow::anyhow!("Building the CSR encountered an error, {}", e))?;
     Ok(csr.into())
+}
+
+pub fn read_dataframe_index(container: &DataContainer<anndata_hdf5::H5>) -> anyhow::Result<DataFrameIndex> {
+    let index_name: String = container.get_attr("_index")?;
+    let dataset = container.as_group()?.open_dataset(&index_name)?;
+    match dataset
+        .get_attr::<String>("index_type")
+        .as_ref()
+        .map_or("list", |x| x.as_str())
+    {
+        "list" => {
+            let data = dataset.read_array()?;
+            let mut index: DataFrameIndex = data.to_vec().into();
+            index.index_name = index_name;
+            Ok(index)
+        }
+        "intervals" => {
+            let keys: Vec<String> = dataset.get_attr("names")?;
+            let values: Vec<Vec<u64>> = dataset.get_attr("intervals")?;
+            Ok(keys
+                .into_iter()
+                .zip(values.into_iter().map(|row| Interval {
+                    start: row[0] as usize,
+                    end: row[1] as usize,
+                    size: row[2] as usize,
+                    step: row[3] as usize,
+                }))
+                .collect())
+        }
+        "range" => {
+            let start: u64 = dataset.get_attr("start")?;
+            let end: u64 = dataset.get_attr("end")?;
+            Ok((start as usize..end as usize).into())
+        }
+        x => anyhow::bail!("Unknown index type: {}", x),
+    }
 }

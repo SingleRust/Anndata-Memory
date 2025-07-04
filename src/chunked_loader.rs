@@ -6,7 +6,7 @@ use anndata::{
 use nalgebra_sparse::{pattern::SparsityPattern, CsrMatrix};
 use ndarray::Ix1;
 
-use crate::{converter::LoadingConfig, utils::{read_array_as_usize_optimized, read_array_slice_as_usize}};
+use crate::{utils::{read_array_as_usize_optimized, read_array_slice_as_usize}, LoadingConfig};
 
 pub fn load_csr_chunked<B: Backend>(
     container: &DataContainer<B>,
