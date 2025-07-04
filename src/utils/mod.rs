@@ -1,6 +1,6 @@
 use std::{collections::HashMap, mem::replace};
 
-use anndata::{backend::{DataContainer, DatasetOp, GroupOp, ScalarType}, data::{DynCscMatrix, DynCsrMatrix, SelectInfoElem}, Backend};
+use anndata::{backend::{DataContainer, DatasetOp, GroupOp, ScalarType}, data::{DynCscMatrix, DynCsrMatrix, SelectInfoElem}, ArrayData, Backend};
 use nalgebra_sparse::{pattern::SparsityPattern, CscMatrix, CsrMatrix};
 use ndarray::Slice;
 
@@ -362,7 +362,7 @@ pub fn read_array_as_usize_optimized<B: Backend>(dataset: &B::Dataset) -> anyhow
     read_array_as_usize::<B>(dataset)
 }
 
-fn read_array_as_usize<B: Backend>(dataset: &B::Dataset) -> anyhow::Result<Vec<usize>> {
+pub fn read_array_as_usize<B: Backend>(dataset: &B::Dataset) -> anyhow::Result<Vec<usize>> {
     match dataset.dtype()? {
         ScalarType::U64 => {
             let arr = dataset.read_array::<u64, ndarray::Ix1>()?;
@@ -400,7 +400,7 @@ fn read_array_as_usize<B: Backend>(dataset: &B::Dataset) -> anyhow::Result<Vec<u
     }
 }
 
-fn read_array_slice_as_usize<B: Backend>(
+pub fn read_array_slice_as_usize<B: Backend>(
     dataset: &B::Dataset,
     selection: &[SelectInfoElem],
 ) -> anyhow::Result<Vec<usize>> {
@@ -450,7 +450,7 @@ pub fn should_use_chunked_loading<B: Backend>(
     }
 
     match container.encoding_type()? {
-        anndata::backend::DataType::CsrMatrix(scalar_type) => {
+        anndata::backend::DataType::CsrMatrix(_) => {
             let group = container.as_group()?;
             let nnz = group.open_dataset("data")?.shape()[0];
             let estimated_mb = (nnz * 16) / 1_048_576;
@@ -458,4 +458,22 @@ pub fn should_use_chunked_loading<B: Backend>(
         },
         _ => Ok(false)
     }
+}
+
+pub fn build_csr_matrix<T>(
+    nrows: usize,
+    ncols: usize,
+    indptr: Vec<usize>,
+    indices: Vec<usize>,
+    data: Vec<T>,
+) -> anyhow::Result<ArrayData>
+where
+    CsrMatrix<T>: Into<ArrayData>,
+{
+    // Use unsafe constructor since we trust the data from AnnData
+    let pattern = unsafe {
+        SparsityPattern::from_offset_and_indices_unchecked(nrows, ncols, indptr, indices)
+    };
+    let csr = CsrMatrix::try_from_pattern_and_values(pattern, data).map_err(|e| anyhow::anyhow!("Building the CSR encountered an error, {}", e))?;
+    Ok(csr.into())
 }
