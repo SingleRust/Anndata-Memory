@@ -116,9 +116,9 @@ fn subset_csr_matrix<T>(
     let nrows = matrix.nrows();
     let ncols = matrix.ncols();
 
-    let row_indices = select_info_elem_to_indices(s[0], nrows)?;
+    let row_indices = crate::utils::select_info_elem_to_indices(s[0], nrows)?;
     let col_indices = if s.len() > 1 {
-        select_info_elem_to_indices(s[1], ncols)?
+        crate::utils::select_info_elem_to_indices(s[1], ncols)?
     } else {
         (0..ncols).collect()
     };
@@ -127,6 +127,7 @@ fn subset_csr_matrix<T>(
         return Ok(matrix);
     }
 
+    // Use the matrix disassembly to get ownership of the data
     let (row_offsets, col_indices_orig, values) = matrix.disassemble();
 
     if col_indices.len() == ncols {
