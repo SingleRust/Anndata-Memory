@@ -51,6 +51,11 @@ pub(crate) fn select_info_elem_to_indices(
     }
 }
 
+// ####################################################################################################
+//                              Subsetting
+// ####################################################################################################
+
+
 pub(crate) fn subset_dyn_csc_matrix(
     dyn_csc: DynCscMatrix,
     s: &[&SelectInfoElem],
@@ -311,7 +316,6 @@ pub fn read_array_as_usize_optimized<B: Backend>(
 }
 
 pub fn read_array_as_usize<B: Backend>(dataset: &B::Dataset) -> anyhow::Result<Vec<usize>> {
-    println!("Dtype: {}", dataset.dtype()?);
     match dataset.dtype()? {
         ScalarType::U64 => {
             let arr = dataset.read_array::<u64, ndarray::Ix1>()?;
