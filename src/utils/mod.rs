@@ -10,7 +10,7 @@ use nalgebra_sparse::{pattern::SparsityPattern, CscMatrix, CsrMatrix};
 use ndarray::Slice;
 use std::collections::HashMap;
 
-use crate::utils::subset::{is_contiguous, subset_rows_only, subset_with_contiguous_columns, subset_with_sparse_columns};
+use crate::utils::subset::{subset_csr_internal};
 use crate::{LoadingConfig, LoadingStrategy};
 
 mod subset;
@@ -123,22 +123,11 @@ fn subset_csr_matrix<T>(
         (0..ncols).collect()
     };
 
-    if row_indices.len() == nrows && col_indices.len() == ncols {
-        return Ok(matrix);
-    }
-
-    // Use the matrix disassembly to get ownership of the data
+    // Use matrix disassembly to get ownership of the data
     let (row_offsets, col_indices_orig, values) = matrix.disassemble();
-
-    if col_indices.len() == ncols {
-        return subset_rows_only(&row_offsets, &col_indices_orig, values, &row_indices, ncols);
-    }
-
-    if is_contiguous(&col_indices) {
-        subset_with_contiguous_columns(&row_offsets, &col_indices_orig, values, &row_indices, &col_indices)
-    } else {
-        subset_with_sparse_columns(&row_offsets, &col_indices_orig, values, &row_indices, &col_indices)
-    }
+    
+    // Call the internal optimized subset function
+    subset_csr_internal(row_offsets, col_indices_orig, values, &row_indices, &col_indices)
 }
 
 fn subset_csc_matrix<T>(
