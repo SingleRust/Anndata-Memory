@@ -1,6 +1,6 @@
 use anndata::backend::AttributeOp;
 use anndata::data::index::Interval;
-use anndata::data::{self, DataFrameIndex};
+use anndata::data::{DataFrameIndex};
 use anndata::{
     backend::{DataContainer, DatasetOp, GroupOp, ScalarType},
     data::{DynCscMatrix, DynCsrMatrix, SelectInfoElem},
@@ -8,9 +8,12 @@ use anndata::{
 };
 use nalgebra_sparse::{pattern::SparsityPattern, CscMatrix, CsrMatrix};
 use ndarray::Slice;
-use std::{collections::HashMap, mem::replace};
+use std::collections::HashMap;
 
+use crate::utils::subset::{subset_csr_internal};
 use crate::{LoadingConfig, LoadingStrategy};
+
+mod subset;
 
 pub(crate) fn select_info_elem_to_indices(
     elem: &SelectInfoElem,
@@ -47,6 +50,11 @@ pub(crate) fn select_info_elem_to_indices(
         }
     }
 }
+
+// ####################################################################################################
+//                              Subsetting
+// ####################################################################################################
+
 
 pub(crate) fn subset_dyn_csc_matrix(
     dyn_csc: DynCscMatrix,
@@ -113,107 +121,18 @@ fn subset_csr_matrix<T>(
     let nrows = matrix.nrows();
     let ncols = matrix.ncols();
 
-    let row_indices = select_info_elem_to_indices(s[0], nrows)?;
+    let row_indices = crate::utils::select_info_elem_to_indices(s[0], nrows)?;
     let col_indices = if s.len() > 1 {
-        select_info_elem_to_indices(s[1], ncols)?
+        crate::utils::select_info_elem_to_indices(s[1], ncols)?
     } else {
         (0..ncols).collect()
     };
 
-    if row_indices.len() == nrows && col_indices.len() == ncols {
-        return Ok(matrix);
-    }
-
+    // Use matrix disassembly to get ownership of the data
     let (row_offsets, col_indices_orig, values) = matrix.disassemble();
-
-    if col_indices.len() == ncols {
-        let mut new_row_offsets = Vec::with_capacity(row_indices.len() + 1);
-        let mut new_col_indices = Vec::new();
-        let mut new_values = Vec::new();
-        new_row_offsets.push(0);
-
-        let mut values_iter = values.into_iter();
-        let mut current_pos = 0;
-
-        for &row_idx in &row_indices {
-            let start = row_offsets[row_idx];
-            let end = row_offsets[row_idx + 1];
-
-            for _ in current_pos..start {
-                values_iter.next();
-            }
-
-            new_col_indices.extend_from_slice(&col_indices_orig[start..end]);
-            for _ in start..end {
-                if let Some(val) = values_iter.next() {
-                    new_values.push(val);
-                }
-            }
-
-            current_pos = end;
-            new_row_offsets.push(new_col_indices.len());
-        }
-
-        let new_pattern = unsafe {
-            SparsityPattern::from_offset_and_indices_unchecked(
-                row_indices.len(),
-                ncols,
-                new_row_offsets,
-                new_col_indices,
-            )
-        };
-
-        return CsrMatrix::try_from_pattern_and_values(new_pattern, new_values)
-            .map_err(|e| anyhow::anyhow!("Failed to create CSR matrix: {:?}", e));
-    }
-
-    let col_map: HashMap<usize, usize> = col_indices
-        .iter()
-        .enumerate()
-        .map(|(new_idx, &old_idx)| (old_idx, new_idx))
-        .collect();
-
-    let capacity: usize = row_indices
-        .iter()
-        .flat_map(|&row| {
-            let start = row_offsets[row];
-            let end = row_offsets[row + 1];
-            (start..end).filter(|&idx| col_map.contains_key(&col_indices_orig[idx]))
-        })
-        .count();
-
-    let mut new_row_offsets = Vec::with_capacity(row_indices.len() + 1);
-    let mut new_col_indices = Vec::with_capacity(capacity);
-    let mut new_values = Vec::with_capacity(capacity);
-    new_row_offsets.push(0);
-
-    let mut values_vec = values;
-
-    for &row_idx in &row_indices {
-        let start = row_offsets[row_idx];
-        let end = row_offsets[row_idx + 1];
-
-        for idx in start..end {
-            let col = col_indices_orig[idx];
-            if let Some(&new_col) = col_map.get(&col) {
-                new_col_indices.push(new_col);
-                new_values.push(replace(&mut values_vec[idx], unsafe { std::mem::zeroed() }));
-            }
-        }
-        new_row_offsets.push(new_col_indices.len());
-    }
-
-    let new_pattern = unsafe {
-        SparsityPattern::from_offset_and_indices_unchecked(
-            row_indices.len(),
-            col_indices.len(),
-            new_row_offsets,
-            new_col_indices,
-        )
-    };
-
-    CsrMatrix::try_from_pattern_and_values(new_pattern, new_values)
-        .map_err(|e| anyhow::anyhow!("Failed to create CSR matrix: {:?}", e))
+    
+    // Call the internal optimized subset function
+    subset_csr_internal(row_offsets, col_indices_orig, values, &row_indices, &col_indices)
 }
 
 fn subset_csc_matrix<T>(
@@ -397,7 +316,6 @@ pub fn read_array_as_usize_optimized<B: Backend>(
 }
 
 pub fn read_array_as_usize<B: Backend>(dataset: &B::Dataset) -> anyhow::Result<Vec<usize>> {
-    println!("Dtype: {}", dataset.dtype()?);
     match dataset.dtype()? {
         ScalarType::U64 => {
             let arr = dataset.read_array::<u64, ndarray::Ix1>()?;
@@ -544,13 +462,30 @@ pub fn build_csr_matrix<T>(
 where
     CsrMatrix<T>: Into<ArrayData>,
 {
-    // Use unsafe constructor since we trust the data from AnnData
     let pattern = unsafe {
         SparsityPattern::from_offset_and_indices_unchecked(nrows, ncols, indptr, indices)
     };
     let csr = CsrMatrix::try_from_pattern_and_values(pattern, data)
         .map_err(|e| anyhow::anyhow!("Building the CSR encountered an error, {}", e))?;
     Ok(csr.into())
+}
+
+pub fn build_csc_matrix<T>(
+    nrows: usize,
+    ncols: usize,
+    indptr: Vec<usize>,
+    indices: Vec<usize>,
+    data: Vec<T>,
+) -> anyhow::Result<ArrayData>
+where
+    CscMatrix<T>: Into<ArrayData>,
+{
+    let pattern = unsafe {
+        SparsityPattern::from_offset_and_indices_unchecked(nrows, ncols, indptr, indices)
+    };
+    let csc = CscMatrix::try_from_pattern_and_values(pattern, data)
+        .map_err(|e| anyhow::anyhow!("Building the CSC matrix encountered an error: {}", e))?;
+    Ok(csc.into())
 }
 
 pub fn read_dataframe_index(

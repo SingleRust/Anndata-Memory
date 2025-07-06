@@ -464,6 +464,25 @@ impl IMAnnData {
             layers,
         })
     }
+
+    #[cfg(test)]
+    pub fn debug_info(&self) -> anyhow::Result<()> {
+        println!("AnnData Debug Info:");
+        println!("  Dimensions: {} obs x {} vars", self.n_obs(), self.n_vars());
+        
+        let x_shape = self.x().get_shape()?;
+        println!("  X matrix shape: {:?}", x_shape);
+        
+        let obs_df_shape = self.obs().get_data().shape();
+        let var_df_shape = self.var().get_data().shape();
+        println!("  obs DataFrame shape: {:?}", obs_df_shape);
+        println!("  var DataFrame shape: {:?}", var_df_shape);
+        
+        println!("  First 3 obs names: {:?}", &self.obs_names()[..self.n_obs().min(3)]);
+        println!("  First 3 var names: {:?}", &self.var_names()[..self.n_vars().min(3)]);
+        
+        Ok(())
+    }
 }
 
 use std::fmt;

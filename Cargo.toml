@@ -1,6 +1,6 @@
 [package]
 name = "anndata-memory"
-version = "1.0.4"
+version = "1.0.5"
 edition = "2021"
 readme = "README.md"
 repository = "https://github.com/SingleRust/Anndata-Memory"
