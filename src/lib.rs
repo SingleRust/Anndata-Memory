@@ -5,6 +5,7 @@ pub(crate) mod utils;
 pub(crate) mod chunked_loader;
 pub(crate) mod optimized_loader;
 mod loader;
+mod concat;
 
 pub use ad::IMAnnData;
 pub use ad::helpers::IMArrayElement;
@@ -16,6 +17,8 @@ pub use converter::convert_to_in_memory;
 pub use converter::convert_to_backed;
 pub use converter::convert_to_new_backed_h5;
 pub use base::DeepClone;
+
+
 
 #[derive(Clone, Debug)]
 pub enum LoadingStrategy {
@@ -41,6 +44,14 @@ impl Default for LoadingConfig {
             show_progress: true,
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub enum ConcatStrategy {
+    ConcatObs,
+    ConcatVars,
+    Union,
+    Intersection
 }
 
 pub use loader::{load_h5ad, load_h5ad_fast, load_h5ad_conservative, load_h5ad_with_config};
