@@ -1,6 +1,6 @@
 [package]
 name = "anndata-memory"
-version = "1.0.6"
+version = "1.0.7"
 edition = "2021"
 readme = "README.md"
 repository = "https://github.com/SingleRust/Anndata-Memory"
@@ -15,22 +15,17 @@ license-file = "LICENSE.md"
 anyhow = "1.0"
 log = "0.4"
 ndarray = { version = "0.16.1", features = ["rayon"] }
-nalgebra = { version = "0.33.2", features = ["serde-serialize", "rayon"] }
-nalgebra-sparse = "0.10.0"
-polars = { version = "0.45.1", features = [
+nalgebra-sparse = "0.11.0"
+polars = { version = "0.51", features = [
     "lazy",
-    "decompress-fast",
     "ndarray",
     "dtype-full",
 ] }
 parking_lot = "0.12"
-anndata = "0.6.1"
-anndata-hdf5 = "0.5.0"
+anndata = "0.6.2"
+anndata-hdf5 = "0.5.2"
 
 
 [dev-dependencies]
 tempfile = "3.14.0"
-proptest = "1.6.0"
 rand = "0.8.5"
-ndarray-rand = "0.15.0"
-nalgebra = { version = "0.33.2", features = ["rand"] }
