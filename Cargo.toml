@@ -14,16 +14,17 @@ license-file = "LICENSE.md"
 [dependencies]
 anyhow = "1.0"
 log = "0.4"
-ndarray = { version = "0.16.1", features = ["rayon"] }
-nalgebra-sparse = "0.11.0"
-polars = { version = "0.51", features = [
+ndarray = { version = "0.17", features = ["rayon"] }
+polars = { version = "0.53", features = [
     "lazy",
     "ndarray",
     "dtype-full",
 ] }
 parking_lot = "0.12"
-anndata = "0.6.2"
-anndata-hdf5 = "0.5.2"
+anndata = {git="https://github.com/SingleRust/anndata-rs", branch = "sparse-rewrite", package = "anndata" }
+anndata-hdf5 = {git="https://github.com/SingleRust/anndata-rs", branch = "sparse-rewrite", package = "anndata-hdf5" }
+anndata-zarr = {git="https://github.com/SingleRust/anndata-rs", branch = "sparse-rewrite", package = "anndata-zarr" }
+sprs = "0.11.4"
 
 
 [dev-dependencies]

@@ -7,7 +7,7 @@ use std::{
 use anndata::{
     backend::DataType,
     container::{Axis, Dim},
-    data::{DataFrameIndex, DynArray, DynCscMatrix, DynCsrMatrix, Element, SelectInfoElem, Shape},
+    data::{DataFrameIndex, DynArray, Element, SelectInfoElem, Shape},
     ArrayData, Data, HasShape, Selectable,
 };
 use anyhow::bail;
@@ -20,7 +20,7 @@ use polars::{
 };
 
 use crate::base::RwSlot;
-use crate::{base::DeepClone, utils::subset_dyn_csc_matrix, utils::subset_dyn_csr_matrix};
+use crate::{base::DeepClone};
 
 impl DeepClone for ArrayData {
     fn deep_clone(&self) -> Self {
@@ -63,27 +63,8 @@ impl IMArrayElement {
         let data = std::mem::replace(d, placeholder);
 
         // Process the data by consuming it
-        let result = match data {
-            ArrayData::Array(arr) => Ok(ArrayData::Array(arr).select(s)),
-            ArrayData::DataFrame(df) => Ok(ArrayData::DataFrame(df).select(s)),
-            ArrayData::CsrNonCanonical(csr) => Ok(ArrayData::CsrNonCanonical(csr).select(s)),
-            ArrayData::CsrMatrix(dyn_csr) => {
-                subset_dyn_csr_matrix(dyn_csr, s).map(ArrayData::CsrMatrix)
-            }
-            ArrayData::CscMatrix(dyn_csc) => {
-                subset_dyn_csc_matrix(dyn_csc, s).map(ArrayData::CscMatrix)
-            }
-        };
-
-        match result {
-            Ok(processed) => {
-                *d = processed;
-                Ok(())
-            }
-            Err(e) => {
-                Err(e)
-            }
-        }
+        *d = data.select(s);
+        Ok(())
     }
 
     pub fn convert_matrix_format(&self) -> anyhow::Result<()> {
@@ -91,46 +72,20 @@ impl IMArrayElement {
         let d = write_guard.deref_mut();
 
         // Create a placeholder that we can swap with - use an empty dense array as it's likely the smallest
-        let ddata: Array2<f64> = Array2::zeros((0, 0));
-        let placeholder = ArrayData::Array(DynArray::from(ddata));
+        let placeholder = ArrayData::from(Array2::<f64>::zeros((0, 0)));
 
         // Take ownership using replace
         let matrix_data = std::mem::replace(d, placeholder);
 
         let converted = match matrix_data {
-            ArrayData::CsrMatrix(dyn_csr_matrix) => {
-                let csc = match dyn_csr_matrix {
-                    DynCsrMatrix::F64(m) => DynCscMatrix::F64(m.transpose_as_csc()),
-                    DynCsrMatrix::F32(m) => DynCscMatrix::F32(m.transpose_as_csc()),
-                    DynCsrMatrix::I64(m) => DynCscMatrix::I64(m.transpose_as_csc()),
-                    DynCsrMatrix::I32(m) => DynCscMatrix::I32(m.transpose_as_csc()),
-                    DynCsrMatrix::I16(m) => DynCscMatrix::I16(m.transpose_as_csc()),
-                    DynCsrMatrix::I8(m) => DynCscMatrix::I8(m.transpose_as_csc()),
-                    DynCsrMatrix::U64(m) => DynCscMatrix::U64(m.transpose_as_csc()),
-                    DynCsrMatrix::U32(m) => DynCscMatrix::U32(m.transpose_as_csc()),
-                    DynCsrMatrix::U16(m) => DynCscMatrix::U16(m.transpose_as_csc()),
-                    DynCsrMatrix::U8(m) => DynCscMatrix::U8(m.transpose_as_csc()),
-                    DynCsrMatrix::Bool(m) => DynCscMatrix::Bool(m.transpose_as_csc()),
-                    DynCsrMatrix::String(m) => DynCscMatrix::String(m.transpose_as_csc()),
-                };
-                ArrayData::CscMatrix(csc)
+            ArrayData::CsrMatrix(dyn_mat) => {
+                // temporarily disable until we see how anndata-rs does it internally
+                // ArrayData::CscMatrix(dyn_mat.transpose())
+                bail!("Matrix format conversion is temporarily disabled for sprs migration.");
             }
-            ArrayData::CscMatrix(dyn_csc_matrix) => {
-                let csr = match dyn_csc_matrix {
-                    DynCscMatrix::F64(m) => DynCsrMatrix::F64(m.transpose_as_csr()),
-                    DynCscMatrix::F32(m) => DynCsrMatrix::F32(m.transpose_as_csr()),
-                    DynCscMatrix::I64(m) => DynCsrMatrix::I64(m.transpose_as_csr()),
-                    DynCscMatrix::I32(m) => DynCsrMatrix::I32(m.transpose_as_csr()),
-                    DynCscMatrix::I16(m) => DynCsrMatrix::I16(m.transpose_as_csr()),
-                    DynCscMatrix::I8(m) => DynCsrMatrix::I8(m.transpose_as_csr()),
-                    DynCscMatrix::U64(m) => DynCsrMatrix::U64(m.transpose_as_csr()),
-                    DynCscMatrix::U32(m) => DynCsrMatrix::U32(m.transpose_as_csr()),
-                    DynCscMatrix::U16(m) => DynCsrMatrix::U16(m.transpose_as_csr()),
-                    DynCscMatrix::U8(m) => DynCsrMatrix::U8(m.transpose_as_csr()),
-                    DynCscMatrix::Bool(m) => DynCsrMatrix::Bool(m.transpose_as_csr()),
-                    DynCscMatrix::String(m) => DynCsrMatrix::String(m.transpose_as_csr()),
-                };
-                ArrayData::CsrMatrix(csr)
+            ArrayData::CscMatrix(dyn_mat) => {
+                // ArrayData::CsrMatrix(dyn_mat.transpose())
+                bail!("Matrix format conversion is temporarily disabled for sprs migration.");
             }
             _ => {
                 // Put back the original value since we're erroring
@@ -201,7 +156,7 @@ impl IMDataFrameElement {
     pub fn new(df: DataFrame, index: DataFrameIndex) -> Self {
         if df.height() == 0 {
             let tmp_df =
-                DataFrame::new(vec![Column::new("index".into(), &index.clone().into_vec())])
+                DataFrame::new(index.len(), vec![Column::new("index".into(), &index.clone().into_vec())])
                     .unwrap();
             return IMDataFrameElement(RwSlot::new(InnerIMDataFrame { df: tmp_df, index }));
         }
@@ -283,7 +238,7 @@ impl IMDataFrameElement {
                         "Length of column does not match length of DataFrame"
                     ));
                 }
-                data.df.with_column(column)?;
+                data.df.with_column(column.into())?;
                 Ok(())
             }
             None => Err(anyhow::anyhow!("DataFrame is not initialized")),
@@ -319,7 +274,7 @@ impl IMDataFrameElement {
         let d = write_guard.as_mut();
         match d {
             Some(data) => {
-                data.df.replace(column_name, column)?;
+                data.df.replace(column_name, column.into())?;
                 Ok(())
             }
             None => Err(anyhow::anyhow!("DataFrame is not initialized")),

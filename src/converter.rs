@@ -85,7 +85,7 @@ fn convert_axis_arrays_to_backed<B: Backend>(
         let array_data = value.get_data()?;
         let mut guard = target_axis_arrays.lock();
         let data = guard.deref_mut();
-        match (data) {
+        match data {
             None => {}
             Some(data) => data.add_data(&key, array_data)?,
         };

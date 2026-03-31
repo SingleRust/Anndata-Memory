@@ -1,7 +1,7 @@
 use anndata::{AnnData, AnnDataOp, ArrayData, AxisArraysOp, Backend};
 use anndata_hdf5::H5;
 use anndata_memory::*;
-use nalgebra_sparse::{CooMatrix, CsrMatrix};
+use sprs::{CsMatI, TriMatI};
 use ndarray::Array2;
 use polars::prelude::*;
 use rand::rngs::StdRng;
@@ -16,16 +16,16 @@ fn test_round_trip_conversion() -> anyhow::Result<()> {
     let nnz = (n_rows * n_cols) as f64 * density;
     let mut rng = StdRng::seed_from_u64(42);
 
-    let mut coo_matrix = CooMatrix::new(n_rows, n_cols);
+    let mut coo_matrix = TriMatI::<f64, u32>::new((n_rows, n_cols));
 
     for _ in 0..(nnz as usize) {
         let row = rng.gen_range(0..n_rows);
         let col = rng.gen_range(0..n_cols);
         let value = rng.gen::<f64>();
-        coo_matrix.push(row, col, value);
+        coo_matrix.add_triplet(row, col, value);
     }
 
-    let csr_matrix: CsrMatrix<f64> = (&coo_matrix).into();
+    let csr_matrix: CsMatI<f64, u32, u64> = coo_matrix.to_csr();
 
     let im_array = IMArrayElement::new(ArrayData::from(csr_matrix));
 
@@ -37,7 +37,7 @@ fn test_round_trip_conversion() -> anyhow::Result<()> {
         .map(|i| cell_types[i % cell_types.len()])
         .collect();
 
-    let obs_df = DataFrame::new(vec![Column::from(Series::new(
+    let obs_df = DataFrame::new(obs_names.len(), vec![Column::from(Series::new(
         PlSmallStr::from("cell_type"),
         obs_cell_types,
     ))])?;
@@ -49,7 +49,7 @@ fn test_round_trip_conversion() -> anyhow::Result<()> {
         .map(|i| gene_types[i % gene_types.len()])
         .collect();
 
-    let var_df = DataFrame::new(vec![Column::from(Series::new(
+    let var_df = DataFrame::new(var_names.len(), vec![Column::from(Series::new(
         PlSmallStr::from("gene_type"),
         var_gene_types,
     ))])?;
@@ -57,16 +57,16 @@ fn test_round_trip_conversion() -> anyhow::Result<()> {
 
     let mut im_anndata = IMAnnData::new(im_array, obs_element, var_element)?;
 
-    let mut coo_norm = CooMatrix::new(n_rows, n_cols);
+    let mut coo_norm = TriMatI::<f64, u32>::new((n_rows, n_cols));
 
     for _ in 0..(nnz as usize) {
         let row = rng.gen_range(0..n_rows);
         let col = rng.gen_range(0..n_cols);
         let value = rng.gen::<f64>() * 0.1; // Smaller values
-        coo_norm.push(row, col, value);
+        coo_norm.add_triplet(row, col, value);
     }
 
-    let csr_norm: CsrMatrix<f64> = CsrMatrix::from(&coo_norm);
+    let csr_norm: CsMatI<f64, u32, u64> = coo_norm.to_csr();
 
     let layer_im_array = IMArrayElement::new(ArrayData::from(csr_norm));
     im_anndata.add_layer("normalized".to_string(), layer_im_array)?;

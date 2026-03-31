@@ -10,9 +10,7 @@ use crate::IMArrayElement;
 use crate::IMElement;
 use crate::LoadingStrategy;
 use crate::{
-    chunked_loader::load_csr_chunked,
-    optimized_loader::load_csr_optimized,
-    utils::{read_dataframe_index, should_use_chunked_loading},
+    utils::{read_dataframe_index},
     IMAnnData, LoadingConfig,
 };
 
@@ -141,12 +139,12 @@ fn load_x_matrix(
     let matrix_type = x_container.encoding_type()?;
     if config.show_progress {
         match &matrix_type {
-            anndata::backend::DataType::CsrMatrix(_) => {
+            anndata::backend::DataType::CsrMatrix(..) | anndata::backend::DataType::CscMatrix(..) => {
                 let group = x_container.as_group()?;
                 let shape: Vec<u64> = group.get_attr("shape")?;
                 let nnz = group.open_dataset("data")?.shape()[0];
                 println!(
-                    "  CSR matrix: {}×{} with {} non-zeros",
+                    "  Sparse matrix: {}×{} with {} non-zeros",
                     shape[0], shape[1], nnz
                 );
             }
@@ -160,27 +158,11 @@ fn load_x_matrix(
         }
     }
 
-    let result = match matrix_type {
-        anndata::backend::DataType::CsrMatrix(_) => {
-            if should_use_chunked_loading(&x_container, config)? {
-                if config.show_progress {
-                    println!("  Using chunked loading for large matrix");
-                }
-                load_csr_chunked(&x_container, config)?
-            } else {
-                if config.show_progress {
-                    println!("  Using optimized CSR loading");
-                }
-                load_csr_optimized(&x_container)?
-            }
-        }
-        _ => {
-            if config.show_progress {
-                println!("  Using standard loading");
-            }
-            ArrayData::read(&x_container)?
-        }
-    };
+    if config.show_progress {
+        println!("  Using standard loading");
+    }
+    
+    let result = ArrayData::read(&x_container)?;
 
     if config.show_progress {
         println!("  X matrix loaded successfully");
@@ -217,23 +199,7 @@ fn load_axis_arrays(
 
         let array_container = DataContainer::open(&group, &array_name)?;
 
-        let array_data = if group_name == "layers" {
-            match array_container.encoding_type()? {
-                anndata::backend::DataType::CsrMatrix(_) => {
-                    if should_use_chunked_loading(&array_container, config)? {
-                        if config.show_progress {
-                            println!("    Using chunked loading for layer {}", array_name);
-                        }
-                        load_csr_chunked(&array_container, config)?
-                    } else {
-                        load_csr_optimized(&array_container)?
-                    }
-                }
-                _ => ArrayData::read(&array_container)?,
-            }
-        } else {
-            ArrayData::read(&array_container)?
-        };
+        let array_data = ArrayData::read(&array_container)?;
 
         let im_array = IMArrayElement::new(array_data);
         target_arrays.add_array(array_name, im_array)?;
