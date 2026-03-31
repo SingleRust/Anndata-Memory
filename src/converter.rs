@@ -3,7 +3,6 @@ use std::ops::{Deref, DerefMut};
 use anndata::data::DataFrameIndex;
 use anndata::{
     AnnData, AnnDataOp, ArrayData, ArrayElemOp, AxisArrays, Backend, ElemCollection,
-    ElemCollectionOp,
 };
 use anndata_hdf5::H5;
 use anyhow::Ok;

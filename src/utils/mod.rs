@@ -2,11 +2,9 @@ use anndata::backend::AttributeOp;
 use anndata::data::index::Interval;
 use anndata::data::{DataFrameIndex};
 use anndata::{
-    backend::{DataContainer, DatasetOp, GroupOp, ScalarType},
+    backend::{DataContainer, DatasetOp, GroupOp},
     data::{SelectInfoElem},
-    ArrayData, Backend,
 };
-use ndarray::Slice;
 
 pub(crate) fn select_info_elem_to_indices(
     elem: &SelectInfoElem,
@@ -42,85 +40,6 @@ pub(crate) fn select_info_elem_to_indices(
 
             Ok(indices)
         }
-    }
-}
-
-pub fn read_array_as_usize<B: Backend>(dataset: &B::Dataset) -> anyhow::Result<Vec<usize>> {
-    match dataset.dtype()? {
-        ScalarType::U64 => {
-            let arr = dataset.read_array::<u64, ndarray::Ix1>()?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        ScalarType::U32 => {
-            let arr = dataset.read_array::<u32, ndarray::Ix1>()?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        ScalarType::U16 => {
-            let arr = dataset.read_array::<u16, ndarray::Ix1>()?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        ScalarType::U8 => {
-            let arr = dataset.read_array::<u8, ndarray::Ix1>()?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        ScalarType::I64 => {
-            let arr = dataset.read_array::<i64, ndarray::Ix1>()?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        ScalarType::I32 => {
-            let arr = dataset.read_array::<i32, ndarray::Ix1>()?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        ScalarType::I16 => {
-            let arr = dataset.read_array::<i16, ndarray::Ix1>()?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        ScalarType::I8 => {
-            let arr = dataset.read_array::<i8, ndarray::Ix1>()?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        dt => anyhow::bail!("Cannot read {:?} as usize array", dt),
-    }
-}
-
-pub fn read_array_slice_as_usize<B: Backend>(
-    dataset: &B::Dataset,
-    selection: &[SelectInfoElem],
-) -> anyhow::Result<Vec<usize>> {
-    match dataset.dtype()? {
-        ScalarType::U64 => {
-            let arr = dataset.read_array_slice::<u64, _, ndarray::Ix1>(selection)?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        ScalarType::U32 => {
-            let arr = dataset.read_array_slice::<u32, _, ndarray::Ix1>(selection)?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        ScalarType::U16 => {
-            let arr = dataset.read_array_slice::<u16, _, ndarray::Ix1>(selection)?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        ScalarType::U8 => {
-            let arr = dataset.read_array_slice::<u8, _, ndarray::Ix1>(selection)?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        ScalarType::I64 => {
-            let arr = dataset.read_array_slice::<i64, _, ndarray::Ix1>(selection)?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        ScalarType::I32 => {
-            let arr = dataset.read_array_slice::<i32, _, ndarray::Ix1>(selection)?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        ScalarType::I16 => {
-            let arr = dataset.read_array_slice::<i16, _, ndarray::Ix1>(selection)?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        ScalarType::I8 => {
-            let arr = dataset.read_array_slice::<i8, _, ndarray::Ix1>(selection)?;
-            Ok(arr.into_iter().map(|x| x as usize).collect())
-        }
-        dt => anyhow::bail!("Cannot read {:?} as usize array", dt),
     }
 }
 

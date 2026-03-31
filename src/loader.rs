@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anndata::backend::AttributeOp;
 use anndata::backend::GroupOp;
-use anndata::{backend::DataContainer, data::DataFrameIndex, ArrayData, Backend, Data, Readable};
+use anndata::{backend::DataContainer, ArrayData, Backend, Data, Readable};
 use anndata_hdf5::{H5File, H5};
 use polars::frame::DataFrame;
 

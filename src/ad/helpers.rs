@@ -77,14 +77,16 @@ impl IMArrayElement {
         // Take ownership using replace
         let matrix_data = std::mem::replace(d, placeholder);
 
-        let converted = match matrix_data {
-            ArrayData::CsrMatrix(dyn_mat) => {
+        match matrix_data {
+            ArrayData::CsrMatrix(_) => {
+                // Put back the original value since we're erroring
+                *d = matrix_data;
                 // temporarily disable until we see how anndata-rs does it internally
-                // ArrayData::CscMatrix(dyn_mat.transpose())
                 bail!("Matrix format conversion is temporarily disabled for sprs migration.");
             }
-            ArrayData::CscMatrix(dyn_mat) => {
-                // ArrayData::CsrMatrix(dyn_mat.transpose())
+            ArrayData::CscMatrix(_) => {
+                // Put back the original value since we're erroring
+                *d = matrix_data;
                 bail!("Matrix format conversion is temporarily disabled for sprs migration.");
             }
             _ => {
@@ -92,10 +94,7 @@ impl IMArrayElement {
                 *d = matrix_data;
                 bail!("This datatype is not supported, only CSC and CSR matrices are supported.")
             }
-        };
-
-        *d = converted;
-        Ok(())
+        }
     }
 
     pub fn subset(&self, s: &[&SelectInfoElem]) -> anyhow::Result<Self> {

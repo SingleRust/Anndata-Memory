@@ -7,7 +7,8 @@ pub(crate) mod csr;
 // TODO!
 
 
-pub fn concat_datasets_backed_to_memory<P: AsRef<Path>>(paths: &[P], load_strategy: Option<LoadingStrategy>, merge_strategy: Option<ConcatStrategy>) {
+#[allow(dead_code)]
+pub fn concat_datasets_backed_to_memory<P: AsRef<Path>>(_paths: &[P], _load_strategy: Option<LoadingStrategy>, _merge_strategy: Option<ConcatStrategy>) {
 
     // general approach have dataset:
     // 1. collect statistics: ensure all datasets have same datatype (for sparse datatypes collect num rows, num cols, nnz)
