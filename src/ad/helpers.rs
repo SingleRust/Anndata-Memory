@@ -72,7 +72,7 @@ impl IMArrayElement {
         let d = write_guard.deref_mut();
 
         // Create a placeholder that we can swap with - use an empty dense array as it's likely the smallest
-        let placeholder = ArrayData::from(Array2::<f64>::zeros((0, 0)));
+        let placeholder = ArrayData::Array(DynArray::from(Array2::<f64>::zeros((0, 0))));
 
         // Take ownership using replace
         let matrix_data = std::mem::replace(d, placeholder);
@@ -695,5 +695,40 @@ impl IMElementCollection {
         let data = read_guard.deref();
         let keys = data.keys().map(|k| k.clone()).collect();
         Ok(keys)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::Array2;
+    use anndata::data::SelectInfoElem;
+
+    #[test]
+    fn test_shallow_vs_deep_clone_behavior() -> anyhow::Result<()> {
+        let data = Array2::<f64>::from_elem((10, 10), 1.0);
+        let array_element = IMArrayElement::new(ArrayData::from(data));
+
+        // Shallow clone
+        let shallow = array_element.clone();
+        
+        // Subsetting in-place affects both
+        let selection = SelectInfoElem::from(0..5);
+        shallow.subset_inplace(&[&selection, &selection])?;
+        
+        assert_eq!(array_element.get_shape()?.as_ref(), &[5, 5]);
+        assert_eq!(shallow.get_shape()?.as_ref(), &[5, 5]);
+
+        // Deep clone
+        let deep = array_element.deep_clone();
+        
+        // Subsetting deep doesn't affect original
+        let selection2 = SelectInfoElem::from(0..2);
+        deep.subset_inplace(&[&selection2, &selection2])?;
+        
+        assert_eq!(array_element.get_shape()?.as_ref(), &[5, 5]);
+        assert_eq!(deep.get_shape()?.as_ref(), &[2, 2]);
+
+        Ok(())
     }
 }
