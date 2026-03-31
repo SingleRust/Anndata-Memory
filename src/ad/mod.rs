@@ -216,7 +216,7 @@ impl IMAnnData {
     /// # Errors
     ///
     /// Returns an error if a layer with the same name already exists.
-    pub fn add_layer(&mut self, name: String, data: IMArrayElement) -> anyhow::Result<()> {
+    pub fn add_layer(&self, name: String, data: IMArrayElement) -> anyhow::Result<()> {
         self.layers.add_array(name, data)
     }
 
