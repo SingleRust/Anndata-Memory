@@ -1,29 +1,27 @@
 # AnnData-Memory
 
-![Version](https://img.shields.io/badge/version-1.0.1-blue)
+![Version](https://img.shields.io/badge/version-1.0.7-blue)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-green)](LICENSE.md)
 
-A high-performance, thread-safe, in-memory implementation of the AnnData data structure for the SingleRust ecosystem.
+A high-performance, thread-safe, in-memory implementation of the AnnData data structure for the [SingleRust](https://github.com/SingleRust) ecosystem.
 
 ## Overview
 
-AnnData-Memory provides a thread-safe, high-performance implementation of the AnnData data structure for single-cell genomics data analysis in Rust. It serves as a companion to the [anndata-rs](https://github.com/kaizhang/anndata-rs) crate, focusing on efficient in-memory operations with controlled mutability and concurrent access patterns.
+**AnnData-Memory** provides a thread-safe, high-performance implementation of the AnnData data structure for single-cell genomics data analysis in Rust. It serves as an in-memory companion to the [anndata-rs](https://github.com/kaizhang/anndata-rs) crate, focusing on efficient random access, controlled mutability, and safe concurrent operations.
 
-This library is designed to:
-- Accelerate AnnData operations through optimized in-memory structures
-- Enable safe multi-threaded access to AnnData objects
-- Provide flexible and efficient data manipulation capabilities
-- Seamlessly integrate with the broader SingleRust ecosystem
+This library is designed for:
+- **High-Performance Analysis**: Accelerate workflows by keeping data in optimized RAM structures.
+- **Thread Safety**: Safe multi-threaded access using fine-grained locking.
+- **Interoperability**: Seamlessly switch between backed (H5AD/Zarr) and in-memory representations.
+- **Lean Data Transfer**: Efficiently ingest data from disk using `take()` and `drain()` semantics when possible.
 
 ## Key Features
 
-- **Thread-Safe Data Access**: Built on `parking_lot` locks for efficient concurrent operations
-- **Controlled Mutability**: Fine-grained locking mechanisms allow for safe concurrent reads and writes
-- **Memory Efficiency**: Optimized data structures to reduce memory overhead
-- **Format Conversion**: Seamless conversion between CSR and CSC sparse matrix formats
-- **Efficient Subsetting**: Fast subsetting operations (both in-place and copy-based)
-- **H5 Interoperability**: Convert between H5-backed AnnData and in-memory structures
-- **Comprehensive Data Model**: Full support for AnnData components (X, obs, var, layers, obsm, obsp, varm, varp, uns)
+- **Component-Level Locking**: Built on `parking_lot` for efficient concurrent operations; each AnnData component (X, obs, obsm, etc.) is individually locked.
+- **Sparse Matrix Support**: Native integration with [sprs](https://github.com/vbarrielle/sprs) for high-performance sparse matrix operations.
+- **H5 & Zarr Interoperability**: Direct loading from `.h5ad` files and Zarr V3 stores.
+- **Flexible Subsetting**: Fast in-place and copy-based subsetting operations.
+- **Comprehensive Data Model**: Full support for all AnnData components (X, obs, var, layers, obsm, obsp, varm, varp, uns).
 
 ## Installation
 
@@ -31,165 +29,99 @@ Add AnnData-Memory to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-anndata-memory = "1.0.1"
+anndata-memory = "1.0.7"
 ```
 
 ## Usage
 
 ### Creating an AnnData Object
 
+AnnData-Memory uses `sprs` for sparse data. You can easily create an `IMAnnData` object from raw components:
+
 ```rust
-use anndata::{ArrayData, data::DynCsrMatrix};
-use anndata_memory::{IMAnnData, IMArrayElement};
-use nalgebra_sparse::{CooMatrix, CsrMatrix};
+use anndata::ArrayData;
+use anndata_memory::IMAnnData;
+use sprs::{CsMatI, TriMatI};
 
-// Create a sparse matrix
-let mut coo_matrix = CooMatrix::new(nrows, ncols);
-coo_matrix.push(0, 0, 1.0);
-coo_matrix.push(1, 2, 2.0);
-// ... add more entries
+// Create a sparse matrix (CSR format)
+let (nrows, ncols) = (3, 3);
+let mut coo = TriMatI::<f64, u32>::new((nrows, ncols));
+coo.add_triplet(0, 0, 1.0);
+coo.add_triplet(1, 2, 2.0);
 
-let csr_matrix = CsrMatrix::from(&coo_matrix);
-let matrix = DynCsrMatrix::from(csr_matrix);
-let array_data = ArrayData::CsrMatrix(matrix);
+let csr: CsMatI<f64, u32, u64> = coo.to_csr();
+let array_data: ArrayData = csr.into();
 
-// Create the AnnData object
+// Initialize the AnnData object
 let adata = IMAnnData::new_basic(
     array_data,
-    vec!["cell1".to_string(), "cell2".to_string(), "cell3".to_string()],
-    vec!["gene1".to_string(), "gene2".to_string(), "gene3".to_string()]
+    vec!["cell1".into(), "cell2".into(), "cell3".into()],
+    vec!["gene1".into(), "gene2".into(), "gene3".into()]
 ).unwrap();
 ```
 
-### Converting from H5-backed AnnData
+### Loading Data (H5AD & Zarr)
+
+You can load data directly into memory from various backends:
 
 ```rust
-use anndata::{AnnData};
+use anndata_memory::{load_h5ad, load_zarr};
+
+// From HDF5 (.h5ad)
+let adata_h5 = load_h5ad("data.h5ad").unwrap();
+
+// From Zarr V3
+let adata_zarr = load_zarr("data.zarr").unwrap();
+```
+
+### In-Memory Conversion
+
+For fine-grained control, you can open a backed AnnData object and convert it. The conversion is optimized to transfer ownership of data buffers where possible.
+
+```rust
+use anndata::AnnData;
 use anndata_hdf5::H5;
 use anndata_memory::convert_to_in_memory;
 
-// Open an H5-backed AnnData file
-let h5_file = H5::open("data.h5ad").unwrap();
-let anndata = AnnData::<H5>::open(h5_file).unwrap();
+// Open backed file
+let file = H5::open("data.h5ad").unwrap();
+let backed = AnnData::<H5>::open(file).unwrap();
 
 // Convert to in-memory representation
-let imanndata = convert_to_in_memory(anndata).unwrap();
+let adata = convert_to_in_memory(backed).unwrap();
 ```
 
-### Working with Layers
+### Concurrent Access
+
+Individual components of `IMAnnData` are protected by `RwLock`. Multiple threads can read different components simultaneously.
 
 ```rust
-use anndata_memory::{IMAnnData, IMArrayElement};
-
-// Add a layer to the AnnData object
-let layer_name = "normalized".to_string();
-adata.add_layer(layer_name.clone(), normalized_data).unwrap();
-
-// Retrieve a layer
-let layer = adata.get_layer("normalized").unwrap();
-```
-
-### Subsetting Data
-
-```rust
-use anndata::data::SelectInfoElem;
-
-// Create selection criteria
-let obs_selection = SelectInfoElem::Index(vec![0, 2]); // Select observations 0 and 2
-let var_selection = SelectInfoElem::Index(vec![1, 2]); // Select variables 1 and 2
-
-// Create a subset of the data (creating a new object)
-let subset = adata.subset(&[&obs_selection, &var_selection]).unwrap();
-
-// Or subset in-place
-adata.subset_inplace(&[&obs_selection, &var_selection]).unwrap();
-```
-
-### Matrix Format Conversion
-
-```rust
-use anndata_memory::IMArrayElement;
-
-// Get the X matrix and convert between CSR and CSC formats
-let x = adata.x();
-x.convert_matrix_format().unwrap(); // Converts CSR to CSC or vice versa
-```
-
-## Thread Safety
-
-AnnData-Memory is designed for safe concurrent access. The `IMAnnData` structure itself isn't wrapped in a lock, but each of its fields (x, obs, var, layers, etc.) is individually wrapped in a thread-safe `RwSlot` that allows multiple readers or a single writer at any time. This provides fine-grained control over concurrency.
-
-```rust
+use std::sync::Arc;
 use std::thread;
-use std::sync::{Arc, RwLock};
-use anndata_memory::IMAnnData;
 
-// For thread-safe access to the whole object, wrap it in Arc<RwLock<>>
-let adata = Arc::new(RwLock::new(adata));
+let adata = Arc::new(adata);
 
-// Example 1: Multiple threads accessing individual fields (safer)
-let handles: Vec<_> = (0..10).map(|i| {
-    let adata_clone = Arc::clone(&adata);
-    thread::spawn(move || {
-        // Lock the whole object only briefly to get references to fields
-        let data = adata_clone.read().unwrap();
-        
-        // Now work with the thread-safe fields
-        let x = data.x(); // Each field is already in a RwSlot
-        let shape = x.get_shape().unwrap();
-        
-        // Process field-specific data...
-        println!("Thread {} working with matrix of shape {:?}", i, shape);
-    })
-}).collect();
-
-// Example 2: When you need to modify the IMAnnData structure itself
-let handle = {
-    let adata_clone = Arc::clone(&adata);
-    thread::spawn(move || {
-        // Get write lock on the entire object
-        let mut data = adata_clone.write().unwrap();
-        
-        // Now you can safely modify any aspect of the IMAnnData
-        data.subset_inplace(&[&obs_selection, &var_selection]).unwrap();
-    })
-};
-
-// Wait for all threads to complete
-for handle in handles {
-    handle.join().unwrap();
-}
+let handle = thread::spawn({
+    let adata = Arc::clone(&adata);
+    move || {
+        let x = adata.x().get_data().unwrap();
+        // Perform computation on X...
+    }
+});
 ```
-
-Note: When performing mutations from multiple threads, you need to take extra care to avoid lock races since `IMAnnData` itself isn't thread-safe (only its individual fields are). For multi-threaded write operations, consider wrapping your `IMAnnData` instance in a `RwLock` or `Mutex`, or use the `deep_clone()` method to create independent copies when necessary.
 
 ## Performance Considerations
 
-- Use `get_layer_shallow()` for read-only access to layers to avoid unnecessary cloning
-- Consider converting between CSR and CSC formats based on your access patterns (row-wise vs. column-wise)
-- For multi-threaded applications, balance the granularity of operations to minimize lock contention
+- **Lean Extraction**: When converting from backed objects, `anndata-memory` attempts to use "take" semantics to move data out of the source object's cache, minimizing memory duplication.
+- **Sparse vs Dense**: `X` can be either sparse (CSR/CSC) or dense (ndarray). `sprs` is used for all sparse operations.
+- **Subsetting**: In-place subsetting (`subset_inplace`) is generally faster and more memory-efficient than creating a new subset.
 
 ## Architecture
 
-AnnData-Memory uses a component-based architecture:
-
-- `IMAnnData`: The main container structure, containing individually thread-safe fields
-- `IMArrayElement`: Thread-safe wrapper for array data (using `RwSlot`)
-- `IMDataFrameElement`: Thread-safe wrapper for DataFrames with index (using `RwSlot`)
-- `IMAxisArrays`: Thread-safe collection of arrays associated with an axis (using `RwSlot`)
-- `IMElementCollection`: Thread-safe collection of unstructured annotations (using `RwSlot`)
-- `RwSlot`: Basic building block providing controlled access to data with read-write locking
-
-## Limitations
-
-- View support is limited (subsetting creates copies, not views)
-- The `IMAnnData` structure itself isn't thread-safe, only its individual fields are
-- Some operations may involve lock races when writing to multiple fields from different threads
-- Care must be taken with concurrent operations to prevent deadlocks (as noted in the source code comments)
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+AnnData-Memory uses a **Component-Level Locking** strategy:
+- `IMAnnData`: The primary container.
+- `RwSlot<T>`: A wrapper around `Arc<RwLock<Option<T>>>` used for individual fields.
+- `IMArrayElement`, `IMDataFrameElement`, etc.: Thread-safe wrappers for specific AnnData components.
 
 ## License
 
@@ -197,5 +129,5 @@ This project is licensed under the BSD 3-Clause License - see the [LICENSE.md](L
 
 ## Acknowledgments
 
-- [anndata-rs](https://github.com/kaizhang/anndata-rs) team for the core AnnData implementation in Rust
-- The SingleRust ecosystem contributors
+- The [anndata-rs](https://github.com/kaizhang/anndata-rs) team for the foundational AnnData traits and backends.
+- The [sprs](https://github.com/vbarrielle/sprs) maintainers for high-performance sparse matrix primitives.

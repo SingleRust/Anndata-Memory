@@ -52,4 +52,4 @@ pub enum ConcatStrategy {
     Intersection
 }
 
-pub use loader::{load_h5ad, load_h5ad_fast, load_h5ad_conservative, load_h5ad_with_config};
+pub use loader::{load_h5ad, load_h5ad_fast, load_h5ad_conservative, load_h5ad_with_config, load_zarr, load_zarr_with_config};
